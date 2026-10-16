@@ -1,0 +1,61 @@
+{
+    "name": "@nera-static/plugin-consent",
+    "version": "0.0.0",
+    "description": "A plugin for Nera static site generator that adds a consent banner and settings dialog, and keeps scripts and embeds inert until the visitor agrees, all from config/consent.yaml.",
+    "main": "index.js",
+    "scripts": {
+        "lint": "eslint .",
+        "test": "vitest",
+        "prepare": "husky"
+    },
+    "type": "module",
+    "exports": {
+        ".": "./index.js"
+    },
+    "files": [
+        "index.js",
+        "CHANGELOG.md"
+    ],
+    "keywords": [
+        "nera",
+        "nera-plugin",
+        "static-site-generator",
+        "consent",
+        "cookie-banner",
+        "gdpr",
+        "dsgvo",
+        "privacy"
+    ],
+    "author": "Michael Becker",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/seebaermichi/nera-plugin-consent.git"
+    },
+    "bugs": {
+        "url": "https://github.com/seebaermichi/nera-plugin-consent/issues"
+    },
+    "homepage": "https://github.com/seebaermichi/nera-plugin-consent#readme",
+    "publishConfig": {
+        "access": "public"
+    },
+    "peerDependencies": {
+        "@nera-static/core": ">=4.13.0"
+    },
+    "engines": {
+        "node": "^20.19.0 || >=22.0.0"
+    },
+    "sideEffects": false,
+    "dependencies": {
+        "@nera-static/plugin-utils": "^1.6.1",
+        "cheerio": "^1.2.0"
+    },
+    "devDependencies": {
+        "@nera-static/core": "^4.16.4",
+        "@nera-static/validate": "^1.4.3",
+        "eslint": "^10.12.0",
+        "happy-dom": "^21.0.3",
+        "husky": "^9.1.7",
+        "vitest": "^5.0.5"
+    }
+}
