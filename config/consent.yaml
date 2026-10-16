@@ -32,7 +32,7 @@ notice: true
 #             provider: Google Ireland Limited, Dublin
 #             purpose: Shows embedded videos.
 #             privacy_url: https://policies.google.com/privacy
-#             # iframes on these hosts become a two-click placeholder
+#             # iframes and media on these hosts become a two-click placeholder
 #             hosts: [youtube.com, youtube-nocookie.com]
 #     - id: analytics
 #       services:

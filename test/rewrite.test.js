@@ -2,8 +2,8 @@ import { load } from 'cheerio'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildAppConsent } from '../src/app-consent.js'
 import { normalizeConfig } from '../src/config.js'
-import { escapeHtml, renderPlaceholder } from '../src/placeholder.js'
-import { findLiveGatedIframes, hasIframe, matchHost, rewriteIframes, srcHost } from '../src/rewrite.js'
+import { escapeHtml, inertStartTag, renderControls, renderPlaceholder, wrapperStart } from '../src/placeholder.js'
+import { findLiveGatedEmbeds, hasEmbed, matchHost, rewriteEmbeds, srcHost } from '../src/rewrite.js'
 import { getMetaData } from '../index.js'
 
 const CONFIG = {
@@ -99,11 +99,11 @@ describe('matchHost', () => {
     })
 })
 
-describe('rewriteIframes', () => {
+describe('rewriteEmbeds', () => {
     const IFRAME = '<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/abc?a=1&amp;b=2" title="A video" allowfullscreen></iframe>'
 
     it('replaces a matched iframe with the placeholder and keeps no live src', () => {
-        const out = rewriteIframes(`<p>Intro</p>\n${IFRAME}\n`, context())
+        const out = rewriteEmbeds(`<p>Intro</p>\n${IFRAME}\n`, context())
         const doc = $(out)
         const iframe = doc('iframe')
         expect(iframe.attr('src')).toBeUndefined()
@@ -131,19 +131,19 @@ describe('rewriteIframes', () => {
         const before = '<p class=x>a &amp; b &#169; &copy;<br>  <B>c</B></p>\n<!-- note -->\n'
         const between = '\n<IMG SRC="/a.png"  alt=\'q\'>\n<iframe src="https://example.org/x"></iframe>\n'
         const after = '\n<table><td>cell</table>\n'
-        const out = rewriteIframes(before + IFRAME + between + IFRAME + after, context())
+        const out = rewriteEmbeds(before + IFRAME + between + IFRAME + after, context())
 
-        const placeholder = rewriteIframes(IFRAME, context())
+        const placeholder = rewriteEmbeds(IFRAME, context())
         expect(out).toBe(before + placeholder + between + placeholder + after)
         expect(out).toContain('<iframe src="https://example.org/x"></iframe>')
     })
 
     it('returns a page without a matched iframe as the same string', () => {
         const content = '<p>No embeds &amp; no iframes</p>'
-        expect(rewriteIframes(content, context())).toBe(content)
+        expect(rewriteEmbeds(content, context())).toBe(content)
         const ungated = '<iframe src="https://example.org/x"></iframe><iframe src="/local.html"></iframe><iframe></iframe>'
-        expect(rewriteIframes(ungated, context())).toBe(ungated)
-        expect(rewriteIframes(content, { ...context(), hosts: [] })).toBe(content)
+        expect(rewriteEmbeds(ungated, context())).toBe(ungated)
+        expect(rewriteEmbeds(content, { ...context(), hosts: [] })).toBe(content)
     })
 
     it('gates subdomain, protocol-relative, upper-case and trailing-dot sources', () => {
@@ -155,7 +155,7 @@ describe('rewriteIframes', () => {
             ' https://youtube.com/embed/x',
         ]
         for (const src of sources) {
-            const out = rewriteIframes(`<iframe src="${src}"></iframe>`, context())
+            const out = rewriteEmbeds(`<iframe src="${src}"></iframe>`, context())
             expect($(out)('iframe').attr('src'), src).toBeUndefined()
             expect($(out)('iframe').attr('data-consent-src'), src).toBe(src)
         }
@@ -168,7 +168,7 @@ describe('rewriteIframes', () => {
             '<svg><foreignObject><iframe src="https://youtube.com/c"></iframe></foreignObject></svg>',
             '<p>x</p><IFRAME SRC="https://youtube.com/d">rest',
         ].join('\n')
-        const out = rewriteIframes(html, context())
+        const out = rewriteEmbeds(html, context())
         expect(out).not.toMatch(/\ssrc=/i)
         expect(out.match(/data-consent-embed/g)).toHaveLength(4)
         expect(out).toContain('<p>x</p>')
@@ -176,17 +176,17 @@ describe('rewriteIframes', () => {
     })
 
     it('decodes entities in src before matching', () => {
-        const out = rewriteIframes('<iframe src="https&#58;//youtube.com/x"></iframe>', context())
+        const out = rewriteEmbeds('<iframe src="https&#58;//youtube.com/x"></iframe>', context())
         expect(out).not.toMatch(/\ssrc=/)
     })
 
     it('is idempotent: a placeholder has no live src left to rewrite', () => {
-        const once = rewriteIframes(IFRAME, context())
-        expect(rewriteIframes(once, context())).toBe(once)
+        const once = rewriteEmbeds(IFRAME, context())
+        expect(rewriteEmbeds(once, context())).toBe(once)
     })
 
     it('uses the page language and the service of the matched host', () => {
-        const out = rewriteIframes('<iframe src="https://maps.google.com/x"></iframe>', context('de'))
+        const out = rewriteEmbeds('<iframe src="https://maps.google.com/x"></iframe>', context('de'))
         const doc = $(out)
         expect(doc('.nera-consent-embed').attr('data-consent')).toBe('media')
         expect(doc('[data-consent-load]').text()).toBe('Google Maps laden')
@@ -196,7 +196,7 @@ describe('rewriteIframes', () => {
     })
 
     it('escapes service and provider texts', () => {
-        const out = rewriteIframes('<iframe src="https://google.com/x"></iframe>', context())
+        const out = rewriteEmbeds('<iframe src="https://google.com/x"></iframe>', context())
         expect(out).toContain('<strong>Google &lt;Ireland&gt; &amp; &quot;Co&quot;</strong>')
     })
 
@@ -218,7 +218,7 @@ describe('rewriteIframes', () => {
     })
 
     it('drops srcdoc from a gated iframe', () => {
-        const out = rewriteIframes('<iframe srcdoc="<p>hi</p>" src="https://youtube.com/x" title="t"></iframe>', context())
+        const out = rewriteEmbeds('<iframe srcdoc="<p>hi</p>" src="https://youtube.com/x" title="t"></iframe>', context())
         const iframe = $(out)('iframe')
         expect(iframe.attr('srcdoc')).toBeUndefined()
         expect(out).not.toMatch(/srcdoc/i)
@@ -226,11 +226,142 @@ describe('rewriteIframes', () => {
     })
 })
 
-describe('findLiveGatedIframes', () => {
+describe('rewriteEmbeds — media (ROADMAP "Gated media")', () => {
+    // Any loading attribute still live, wherever it sits.
+    const LIVE = /\s(?:src|data|poster|srcset)=/i
+    const controls = (lang = 'en') => {
+        const locale = consent.locales[lang]
+        const service = locale.categories[0].services[0]
+        return renderControls({ service, texts: locale.texts }) + '</div>'
+    }
+
+    it('gates an <embed>: inert src, wrapper and controls around it', () => {
+        const out = rewriteEmbeds('<p>a</p><embed type="video/mp4" src="https://youtube.com/v.mp4" width="400" /><p>b</p>', context())
+        expect(out).toBe(
+            '<p>a</p>' +
+            wrapperStart('media') +
+            '<embed data-consent="media" type="video/mp4" data-consent-src="https://youtube.com/v.mp4" width="400" hidden>' +
+            controls() +
+            '<p>b</p>'
+        )
+    })
+
+    it('gates an <object> and keeps its fallback content', () => {
+        const out = rewriteEmbeds('<object data="https://youtube.com/o" type="text/html"><p>Fallback &amp; more</p></object>', context())
+        expect(out).toBe(
+            wrapperStart('media') +
+            '<object data-consent="media" data-consent-data="https://youtube.com/o" type="text/html" hidden><p>Fallback &amp; more</p></object>' +
+            controls()
+        )
+    })
+
+    it('gates a <video> with its poster, every <source> and every <track>', () => {
+        const html =
+            '<VIDEO controls poster="https://youtube.com/p.jpg">' +
+            '<source src="https://youtube.com/v.webm" type="video/webm">' +
+            '<source src="/v.mp4" type="video/mp4">' +
+            '<track src="https://youtube.com/c.vtt" kind="captions" srclang="en">' +
+            'Your browser cannot play it.</VIDEO>'
+        expect(rewriteEmbeds(html, context())).toBe(
+            wrapperStart('media') +
+            '<video data-consent="media" controls data-consent-poster="https://youtube.com/p.jpg" hidden>' +
+            '<source data-consent-src="https://youtube.com/v.webm" type="video/webm">' +
+            '<source data-consent-src="/v.mp4" type="video/mp4">' +
+            '<track data-consent-src="https://youtube.com/c.vtt" kind="captions" srclang="en">' +
+            'Your browser cannot play it.</video>' +
+            controls()
+        )
+    })
+
+    it('gates media whose only gated URL is a poster, a <source>, a <track> or a srcset candidate', () => {
+        const cases = [
+            '<video src="/own.mp4" poster="//www.youtube.com/p.jpg"></video>',
+            '<video><source src="/own.mp4"><source src="https://youtube.com/v.mp4"></video>',
+            '<video src="/own.mp4"><track src="https://youtube.com/c.vtt"></video>',
+            '<audio><source srcset="https://example.org/a.mp3 1x, https://youtube.com/b.mp3 2x"></audio>',
+            '<audio src="https://youtube.com/a.mp3"></audio>',
+        ]
+        for (const html of cases) {
+            const out = rewriteEmbeds(html, context())
+            expect(out, html).not.toMatch(LIVE)
+            expect(out.match(/data-consent-embed/g), html).toHaveLength(1)
+        }
+        const audio = rewriteEmbeds(cases[3], context())
+        expect($(audio)('source').attr('data-consent-srcset')).toBe('https://example.org/a.mp3 1x, https://youtube.com/b.mp3 2x')
+    })
+
+    it('leaves own-host and ungated media byte-identical', () => {
+        const html =
+            '<video src="/v.mp4" poster="/p.jpg"><source src="https://example.org/x.mp4"><track src="c.vtt"></video>' +
+            '<audio src="a.mp3"></audio><embed src="/doc.pdf"><object data="https://example.org/x"><p>f</p></object>' +
+            '<picture><source srcset="https://youtube.com/i.webp"><img src="/i.jpg" alt=""></picture>'
+        expect(rewriteEmbeds(html, context())).toBe(html)
+    })
+
+    it('gates nested elements in fallback content, each with its own placeholder', () => {
+        const html = '<object data="https://youtube.com/o"><iframe src="https://maps.google.com/m"></iframe></object>'
+        const out = rewriteEmbeds(html, context())
+        expect(out).not.toMatch(LIVE)
+        const doc = $(out)
+        expect(doc('[data-consent-embed]')).toHaveLength(2)
+        expect(doc('object > [data-consent-embed] > iframe').attr('data-consent-src')).toBe('https://maps.google.com/m')
+        expect(doc('[data-consent-embed] > object').attr('data-consent-data')).toBe('https://youtube.com/o')
+    })
+
+    it('closes unclosed nested media innermost first', () => {
+        const out = rewriteEmbeds('<p>x</p><video src="https://youtube.com/v"><audio src="https://youtube.com/a">rest', context())
+        expect(out).toBe(
+            '<p>x</p>' +
+            wrapperStart('media') + '<video data-consent="media" data-consent-src="https://youtube.com/v" hidden>' +
+            wrapperStart('media') + '<audio data-consent="media" data-consent-src="https://youtube.com/a" hidden>' +
+            'rest</audio>' + controls() + '</video>' + controls()
+        )
+        expect($(out)('video > [data-consent-embed] > audio')).toHaveLength(1)
+    })
+
+    it('gates media inside noscript and template, and is idempotent', () => {
+        const html = '<noscript><video src="https://youtube.com/v"></video></noscript><template><embed src="https://youtube.com/e"></template>'
+        const once = rewriteEmbeds(html, context())
+        expect(once).not.toMatch(LIVE)
+        expect(once.match(/data-consent-embed/g)).toHaveLength(2)
+        expect(rewriteEmbeds(once, context())).toBe(once)
+    })
+
+    it('drops attributes that would contradict the inert form', () => {
+        const out = rewriteEmbeds('<embed hidden data-consent="x" data-consent-src="/old" src="https://youtube.com/e" title="t">', context())
+        expect($(out)('embed').get(0).attribs).toEqual({
+            'data-consent': 'media',
+            'data-consent-src': 'https://youtube.com/e',
+            title: 't',
+            hidden: '',
+        })
+    })
+
+    it('throws on media loading from more than one category', () => {
+        const html = '<video poster="https://google.com/p.jpg"><source src="https://youtube.com/v.mp4"></video>'
+        expect(() => rewriteEmbeds(html, context())).toThrow(/^a <video> loads from services of the categories analytics, media; one consent category cannot gate it — split it into one element per category$/)
+    })
+
+    it('gates one element over two services of one category', () => {
+        const html = '<video poster="https://maps.google.com/p.jpg"><source src="https://www.youtube.com/v.mp4"></video>'
+        expect($(rewriteEmbeds(html, context()))('video').attr('data-consent')).toBe('media')
+    })
+})
+
+describe('inertStartTag', () => {
+    it('renames the loading attributes of each tag in place', () => {
+        expect(inertStartTag('object', { data: 'd', type: 't' }, 'm')).toBe('<object data-consent="m" data-consent-data="d" type="t" hidden>')
+        expect(inertStartTag('source', { srcset: 'a 1x', src: 'b', media: '(x)' })).toBe('<source data-consent-srcset="a 1x" data-consent-src="b" media="(x)">')
+        expect(inertStartTag('track', { src: 's', hidden: '' })).toBe('<track data-consent-src="s" hidden>')
+        expect(inertStartTag('video', { title: '"q"' }, 'm')).toBe('<video data-consent="m" title="&quot;q&quot;" hidden>')
+    })
+})
+
+describe('findLiveGatedEmbeds', () => {
     it('finds a gated iframe the parser drops inside <select>', () => {
         const html = '<select><iframe src="https://www.youtube.com/x"></iframe></select>'
-        expect(rewriteIframes(html, context())).toBe(html)
-        expect(findLiveGatedIframes(html, consent.hosts)).toEqual(['www.youtube.com'])
+        expect(rewriteEmbeds(html, context())).toBe(html)
+        expect(findLiveGatedEmbeds(html, consent.hosts)).toEqual([{ tag: 'iframe', host: 'www.youtube.com' }])
     })
 
     it('never reports the rewrite\'s own placeholders', () => {
@@ -239,19 +370,31 @@ describe('findLiveGatedIframes', () => {
             '<iframe width="560" src="https://youtube.com/a" title="a > b" srcdoc="x"></iframe>',
             '<IFRAME SRC=//maps.google.com/b>',
         ].join('')
-        const out = rewriteIframes(html, context())
+        const out = rewriteEmbeds(html, context())
         expect(out.match(/data-consent-embed/g)).toHaveLength(2)
-        expect(findLiveGatedIframes(out, consent.hosts)).toEqual([])
+        expect(findLiveGatedEmbeds(out, consent.hosts)).toEqual([])
     })
 
     it('reads attributes as a browser does and ignores ungated hosts', () => {
-        expect(findLiveGatedIframes('<iframe title=\'>\' src="https&#58;//youtube.com/x">', consent.hosts)).toEqual(['youtube.com'])
-        expect(findLiveGatedIframes('<iframe src="https://example.com/x" data-src="https://youtube.com/">', consent.hosts)).toEqual([])
-        expect(findLiveGatedIframes('<iframe src="/local" src="https://youtube.com/">', consent.hosts)).toEqual([])
-        expect(findLiveGatedIframes('<iframes src="https://youtube.com/">', consent.hosts)).toEqual([])
+        expect(findLiveGatedEmbeds('<iframe title=\'>\' src="https&#58;//youtube.com/x">', consent.hosts)).toEqual([{ tag: 'iframe', host: 'youtube.com' }])
+        expect(findLiveGatedEmbeds('<iframe src="https://example.com/x" data-src="https://youtube.com/">', consent.hosts)).toEqual([])
+        expect(findLiveGatedEmbeds('<iframe src="/local" src="https://youtube.com/">', consent.hosts)).toEqual([])
+        expect(findLiveGatedEmbeds('<iframes src="https://youtube.com/">', consent.hosts)).toEqual([])
         // A quote inside an unquoted value is a literal, not the start of a value.
         const swallow = '<select><iframe title=a"b src=/x></iframe><iframe src="https://youtube.com/"></iframe></select>'
-        expect(findLiveGatedIframes(swallow, consent.hosts)).toEqual(['youtube.com'])
+        expect(findLiveGatedEmbeds(swallow, consent.hosts)).toEqual([{ tag: 'iframe', host: 'youtube.com' }])
+    })
+    it('finds gated media the parser drops inside <select>, one entry per tag', () => {
+        const html =
+            '<select><video src="https://youtube.com/v" poster="https://youtube.com/p"></video>' +
+            '<embed src="https://youtube.com/e"><object data="https://youtube.com/o"></object>' +
+            '<audio src="/own.mp3"></audio></select>'
+        expect(rewriteEmbeds(html, context())).toBe(html)
+        expect(findLiveGatedEmbeds(html, consent.hosts)).toEqual([
+            { tag: 'video', host: 'youtube.com' },
+            { tag: 'embed', host: 'youtube.com' },
+            { tag: 'object', host: 'youtube.com' },
+        ])
     })
 })
 
@@ -327,6 +470,27 @@ describe('getMetaData', () => {
         expect(console.warn.mock.calls[0][0]).toMatch(/^⚠️ plugin-consent: \/form\.html: an <iframe> from youtube\.com escaped the rewrite/)
     })
 
+    it('names the page in media warnings, and offers the mixin for iframes only', () => {
+        const app = { lang: 'en', consent }
+        const pagesData = [
+            { content: '<select><embed src="https://youtube.com/e"></select>', meta: { href: '/a.html' } },
+        ]
+        getMetaData({ app, pagesData })
+        const messages = console.warn.mock.calls.map(([message]) => message)
+        expect(messages).toHaveLength(1)
+        expect(messages[0]).toMatch(/^⚠️ plugin-consent: \/a\.html: an <embed> from youtube\.com escaped the rewrite .* — move it out$/)
+    })
+
+    it('fails the build with the page on mixed-category media', () => {
+        const app = { lang: 'en', consent }
+        const pagesData = [
+            { content: '<p>ok</p>', meta: { href: '/a.html' } },
+            { content: '<video poster="https://google.com/p"><source src="https://youtube.com/v"></video>', meta: { href: '/b.html' } },
+        ]
+        expect(() => getMetaData({ app, pagesData })).toThrow(/^plugin-consent: \/b\.html: a <video> loads from services of the categories analytics, media; one consent category cannot gate it/)
+        expect(console.warn).not.toHaveBeenCalled()
+    })
+
     it('is deterministic', () => {
         const app = { lang: 'en', consent }
         const pagesData = [{ content: '<p>a</p><iframe src="https://youtube.com/x" title="t"></iframe>', meta: {} }]
@@ -352,10 +516,10 @@ describe('getMetaData', () => {
     })
 })
 
-describe('hasIframe', () => {
+describe('hasEmbed', () => {
     it('detects an iframe tag in any case', () => {
-        expect(hasIframe('<IFRAME src=x>')).toBe(true)
-        expect(hasIframe('<p>no</p>')).toBe(false)
-        expect(hasIframe(null)).toBe(false)
+        expect(hasEmbed('<IFRAME src=x>')).toBe(true)
+        expect(hasEmbed('<p>no</p>')).toBe(false)
+        expect(hasEmbed(null)).toBe(false)
     })
 })

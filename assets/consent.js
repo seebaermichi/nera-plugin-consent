@@ -1,8 +1,9 @@
 /*! @nera-static/plugin-consent runtime — https://github.com/seebaermichi/nera-plugin-consent */
 // The visitor-side half of the plugin (ROADMAP "Runtime behaviour"). It reads
 // the stored choice, shows the banner or the notice when there is none, and
-// activates gated scripts and iframes whose category is granted. Everything it
-// acts on is found through a `data-consent*` attribute, never a class (D7).
+// activates gated scripts and embeds (iframes and media) whose category is
+// granted. Everything it acts on is found through a `data-consent*`
+// attribute, never a class (D7).
 // Linked with `defer`, so it runs once the document is parsed.
 (() => {
     'use strict'
@@ -103,7 +104,13 @@
         [...scope.querySelectorAll(selector)].filter((element) => !element.hasAttribute('data-consent-state'))
 
     const gatedScripts = () => pending('script[type="text/plain"][data-consent]')
-    const gatedIframes = (scope) => pending('iframe[data-consent][data-consent-src]', scope)
+    const gatedEmbeds = (scope) =>
+        pending('iframe[data-consent], embed[data-consent], object[data-consent], video[data-consent], audio[data-consent]', scope)
+
+    // The build renames these to `data-consent-<name>` (ROADMAP "Gated media").
+    const LOADING = ['src', 'data', 'poster', 'srcset']
+    const MEDIA = new Set(['VIDEO', 'AUDIO'])
+    const MEDIA_CHILDREN = new Set(['SOURCE', 'TRACK'])
 
     // Scripts activate one after the other in document order: an external
     // script without `async` holds the queue until it has loaded (or failed),
@@ -165,22 +172,40 @@
         if (!waiting) drain()
     }
 
-    function activateIframe(iframe) {
-        iframe.setAttribute('data-consent-state', ACTIVE)
-        iframe.hidden = false
-        iframe.src = iframe.getAttribute('data-consent-src')
-        const wrapper = iframe.closest('[data-consent-embed]')
+    /** Give every inert loading attribute its live name back. */
+    function restore(element) {
+        for (const name of LOADING) {
+            const value = element.getAttribute(`data-consent-${name}`)
+            if (value !== null) element.setAttribute(name, value)
+        }
+    }
+
+    function activateEmbed(element) {
+        element.setAttribute('data-consent-state', ACTIVE)
+        element.hidden = false
+        if (MEDIA.has(element.tagName)) {
+            // Sources first, so the element's own `src` (which wins) and
+            // `load()` see them.
+            for (const child of element.children) {
+                if (MEDIA_CHILDREN.has(child.tagName)) restore(child)
+            }
+            restore(element)
+            if (typeof element.load === 'function') element.load()
+        } else {
+            restore(element)
+        }
+        const wrapper = element.closest('[data-consent-embed]')
         if (!wrapper) return
         wrapper.setAttribute('data-consent-state', ACTIVE)
         for (const child of wrapper.children) {
-            if (!child.contains(iframe)) child.hidden = true
+            if (!child.contains(element)) child.hidden = true
         }
     }
 
     function activateGranted() {
         activateScripts(gatedScripts().filter((script) => has(script.getAttribute('data-consent'))))
-        for (const iframe of gatedIframes()) {
-            if (has(iframe.getAttribute('data-consent'))) activateIframe(iframe)
+        for (const element of gatedEmbeds()) {
+            if (has(element.getAttribute('data-consent'))) activateEmbed(element)
         }
     }
 
@@ -234,7 +259,7 @@
         ['[data-consent-load]', (control) => {
             // D3: this one embed, for this page view; nothing is stored.
             const wrapper = control.closest('[data-consent-embed]')
-            if (wrapper) gatedIframes(wrapper).forEach(activateIframe)
+            if (wrapper) gatedEmbeds(wrapper).filter((element) => element.parentElement === wrapper).forEach(activateEmbed)
         }],
     ]
 

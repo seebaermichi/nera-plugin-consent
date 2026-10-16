@@ -145,7 +145,7 @@ categories:
                 - name: _pk_id
                   duration: 13 months   # localisable
                   purpose: Recognises returning visitors.   # optional, localisable
-            hosts:                  # optional: iframe hosts gated by this service
+            hosts:                  # optional: embed hosts gated by this service
                 - matomo.example.com
             scripts:                # optional: emitted gated by the head include
                 - src: https://matomo.example.com/matomo.js
@@ -264,16 +264,40 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 - Texts are resolved at build time from the page's language (`meta.lang || app.lang`, else `en`).
 - **Element list (fixed in slice 2):** the wrapper holds exactly the iframe and `__placeholder`; `__placeholder` holds, in order, `p.__text` (`placeholder_text` with `{service}` escaped and `{provider}` in `<strong>`), `button.__load` (`placeholder_load` with `{service}` and `{provider}` escaped, no markup), `a.__privacy` (`service_privacy`, the service's `privacy_url`; **left out** when the service has none) and `button.__settings` (`placeholder_settings`). All text and attribute values are HTML-escaped. `src/placeholder.js#renderPlaceholder` emits it on one line, without whitespace between elements, and `views/embed.pug` mirrors it byte for byte (D2).
 
-**Which iframes are gated.** An iframe is rewritten when the host of its `src` (entities decoded, resolved like a browser on an http **or** https page: protocol-relative `//host/…`, scheme-only `https:host/…`, backslashes, any case, a trailing dot dropped; `http(s)` only) equals a configured `hosts` entry or is a subdomain of one (`www.youtube.com` matches `youtube.com`; `notyoutube.com` and `youtube.com.evil.example` do not). With several matches the longest configured host wins (`maps.google.com` before `google.com`), ties go to the first configured. Root-absolute, relative and `data:`/`about:` sources stay on the site and are never gated. Iframes inside `<noscript>`, `<template>` and SVG `foreignObject` are found too. An iframe without a live `src` (already a placeholder) is left alone, so the rewrite is idempotent. After the rewrite, a raw-text scan of the page (`findLiveGatedIframes`) looks for any `<iframe` start tag that still has a live `src` on a gated host and warns with the page's `meta.href` and the host — it catches markup the parser reads differently from a browser (`<select><iframe …>`, which parse5 drops and a browser with customizable `<select>` keeps). It only warns, never rewrites; it can also report tags inside comments, scripts or fallback text. The rewrite splices the page string at the parser's source offsets: everything that is not a matched iframe stays byte-identical, and a page without one is returned as the same object.
+**Which iframes are gated.** An iframe is rewritten when the host of its `src` (entities decoded, resolved like a browser on an http **or** https page: protocol-relative `//host/…`, scheme-only `https:host/…`, backslashes, any case, a trailing dot dropped; `http(s)` only) equals a configured `hosts` entry or is a subdomain of one (`www.youtube.com` matches `youtube.com`; `notyoutube.com` and `youtube.com.evil.example` do not). With several matches the longest configured host wins (`maps.google.com` before `google.com`), ties go to the first configured. Root-absolute, relative and `data:`/`about:` sources stay on the site and are never gated. Iframes inside `<noscript>`, `<template>` and SVG `foreignObject` are found too. An iframe without a live `src` (already a placeholder) is left alone, so the rewrite is idempotent. After the rewrite, a raw-text scan of the page (`findLiveGatedEmbeds`, which covers gated media too) looks for any `<iframe` start tag that still has a live `src` on a gated host and warns with the page's `meta.href` and the host — it catches markup the parser reads differently from a browser (`<select><iframe …>`, which parse5 drops and a browser with customizable `<select>` keeps). It only warns, never rewrites; it can also report tags inside comments, scripts or fallback text. The rewrite splices the page string at the parser's source offsets: everything that is not a matched iframe stays byte-identical, and a page without one is returned as the same object.
+
+### Gated media
+
+```html
+<div class="nera-consent-embed" data-consent-embed data-consent="media">
+    <video data-consent="media" controls data-consent-poster="https://cdn.example.com/p.jpg" hidden>
+        <source data-consent-src="https://cdn.example.com/v.webm" type="video/webm">
+        <track data-consent-src="https://cdn.example.com/c.vtt" kind="captions">
+        …fallback content…
+    </video>
+    <div class="nera-consent-embed__placeholder">…the same controls as for an iframe…</div>
+</div>
+```
+
+- **Which elements.** Besides `<iframe>`, the rewrite gates `<embed>`, `<object>`, `<video>` and `<audio>` (added in step 8 of the first issue, before 1.0.0). An element is gated when any URL it loads through a **loading attribute** has a configured host, matched exactly as for iframes: `embed[src]`, `object[data]`, `video[src]`, `video[poster]`, `audio[src]`, and for `<video>` / `<audio>` also their child `<source src>`, `<source srcset>` (every candidate URL) and `<track src>`.
+- **Inert form.** Every loading attribute of a gated element **and of its `<source>` / `<track>` children** is renamed in place to `data-consent-<name>` (`data-consent-src`, `data-consent-data`, `data-consent-poster`, `data-consent-srcset`), own-host ones included, so nothing of the element loads before consent. The element gets `data-consent="<category>"` first and `hidden` last (an existing `data-consent`, `hidden` or inert name is dropped); children get neither. Every other attribute stays, in source order.
+- **Wrapper and controls.** The same `div.nera-consent-embed` wrapper and `__placeholder` element list as for an iframe; the placeholder follows the element. The element's content (an `<object>`'s or a media element's fallback) is kept as is, except that gated elements inside it are gated in turn, each with its own placeholder. An unclosed element gets its end tag where the parser ends it. The rewrite writes the end tag in lower case.
+- **Mixed categories fail the build.** An element whose gated URLs belong to services of different categories cannot be gated by one `data-consent` without loading the other category's host on a partial consent, so the build fails with the page, the tag and the categories — split such an element into one per category. The markup contract stays one category per element.
+- **Not gated:** `<img>`, `<picture>` and its `<source srcset>`, CSS `url()`, `<link>`. Own-host and relative URLs never gate an element. The Pug `+consent-embed` mixin renders iframes only.
+- **Runtime.** Activating a gated element (consent, or its placeholder's load button) drops `hidden`, sets every `data-consent-<name>` back as `<name>` — on a media element its `<source>` / `<track>` children first — and calls `load()` on `<video>` / `<audio>`. A placeholder's load button activates only the element directly in its wrapper, never a gated element nested in that element's fallback.
+- **Escape scan.** `findLiveGatedEmbeds` (formerly iframes only) looks at every `<iframe`, `<embed`, `<object`, `<video>` and `<audio` start tag of the rewritten page and warns about one that still loads from a gated host through its own loading attributes. It does not scan `<source>` / `<track>`: outside a gated media element (in a `<picture>`) they are not the rewrite's to gate.
 
 ### Runtime hooks (D7)
 
 | attribute | on | meaning |
 |---|---|---|
-| `data-consent="<id>"` | gated script, gated iframe, embed wrapper | category that activates it |
+| `data-consent="<id>"` | gated script, gated iframe or media element, embed wrapper | category that activates it |
 | `data-src` | gated script | script URL |
 | `data-type="module"` | gated script | activate as a module |
-| `data-consent-src` | gated iframe | iframe URL |
+| `data-consent-src` | gated iframe, `<embed>`, `<video>`, `<audio>`, their `<source>` / `<track>` | the `src` |
+| `data-consent-data` | gated `<object>` | the `data` URL |
+| `data-consent-poster` | gated `<video>` | the `poster` URL |
+| `data-consent-srcset` | `<source>` in a gated `<video>` / `<audio>` | the `srcset` |
 | `data-consent-embed` | placeholder wrapper | one two-click embed |
 | `data-consent-load` | button in a placeholder | load this one embed now (D3) |
 | `data-consent-open` | any element | open the settings dialog (D4) |
@@ -284,7 +308,7 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 | `data-consent-save` | button in the dialog | store exactly the ticked categories |
 | `data-consent-category="<id>"` | checkbox in the dialog | one category |
 | `data-consent-dismiss` | "Got it" in the notice | store the notice as seen |
-| `data-consent-state="active"` | gated script / iframe, set by the runtime | already activated (never twice) |
+| `data-consent-state="active"` | gated script / iframe / media element, set by the runtime | already activated (never twice) |
 
 ### BEM blocks
 
@@ -347,7 +371,7 @@ Details fixed in slice 3 (`assets/consent.js`), which the views follow:
 
 - **Visibility.** The banner and notice roots are rendered with `hidden`; the runtime shows the one root when there is no valid choice and hides it once a choice is stored. Without JavaScript nothing is shown, and nothing gated could run anyway. The banner wins when a page carries both roots.
 - **Script order.** Gated scripts are replaced in place by live copies, in document order. An external script without `async` holds the queue until its `load` or `error`, as a parser-inserted one would (`defer` counts as ordered, since the runtime itself runs deferred); inline and `async` scripts never wait. An element is claimed (`data-consent-state="active"`) before it is queued, so a later pass cannot queue it twice. Inline module scripts are not waited for, as a browser would not either.
-- **Embeds.** Activating an iframe sets `src` from `data-consent-src`, drops its `hidden`, marks the wrapper `data-consent-state="active"` and hides every other child of the wrapper (the placeholder) through `hidden`, without relying on a class (D7).
+- **Embeds.** Activating an iframe sets `src` from `data-consent-src` (a gated media element: see "Gated media"), drops its `hidden`, marks the wrapper `data-consent-state="active"` and hides every other child of the wrapper (the placeholder) through `hidden`, without relying on a class (D7).
 - **`necessary`.** `has('necessary')` is always `true`, so a hand-written element gated as `data-consent="necessary"` activates without a choice. The plugin never emits one: `necessary` cannot be configured.
 - **No root, no consent.** On a page without a banner or notice root (mode `'none'`, or a layout that does not include the views), no choice can be read or given, `get()` is `null` and nothing gated activates. Without a dialog, a `data-consent-open` link keeps its own `href`.
 - **Linked twice.** A second copy of the runtime finds `window.neraConsent` and does nothing.

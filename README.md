@@ -16,7 +16,7 @@ A plugin for the [Nera](https://github.com/seebaermichi/nera) static site genera
 - A banner with **Accept all, Reject all and Settings** on the first layer, in a fixed order and one shared button style
 - A settings dialog (native `<dialog>`) listing every category and service with provider, purpose, cookies and privacy link
 - Gated scripts: configured once, emitted inert (`type="text/plain"`) and run only after consent, in document order
-- Gated embeds: an `<iframe>` from a configured host in your Markdown becomes a two-click placeholder at build time, with no live `src`
+- Gated embeds: an `<iframe>`, `<embed>`, `<object>`, `<video>` or `<audio>` from a configured host in your Markdown becomes a two-click placeholder at build time, with no live `src`
 - No categories configured → only an info notice ("only technically necessary cookies"), or nothing at all
 - Bump `revision` to ask every visitor again
 - German and English texts built in, any other language by config
@@ -28,7 +28,7 @@ These hold whatever `config/consent.yaml` says. No key exists that weakens them;
 
 - Reject all is on the first layer, as visible and as easy to use as Accept all.
 - No category is pre-selected. "Strictly necessary" is the only always-on category; it is implicit and cannot be listed or switched off.
-- Nothing gated runs or loads before consent. Every built page starts with gated scripts inert and gated iframes without `src`.
+- Nothing gated runs or loads before consent. Every built page starts with gated scripts inert and gated iframes and media without a live loading attribute.
 - Consent can be withdrawn at any time through the settings link, without a rebuild.
 - A `revision` bump asks every visitor again.
 
@@ -113,7 +113,7 @@ categories:
                 - name: _pk_id
                   duration: 13 months
                   purpose: Recognises returning visitors.
-            hosts:                  # optional: iframe hosts gated by this service
+            hosts:                  # optional: embed hosts gated by this service
                 - matomo.example.com
             scripts:                # optional: emitted gated by the head view
                 - src: https://matomo.example.com/matomo.js
@@ -149,7 +149,9 @@ Paste the embed code into your Markdown as usual:
 
 When the host of its `src` equals a configured `hosts` entry or is a subdomain of it (`www.youtube.com` matches `youtube.com`; `notyoutube.com` does not), the build replaces it with the two-click placeholder below. Everything else in the page stays byte for byte as it was. Iframes from your own site (root-absolute or relative `src`) are never gated.
 
-A gated iframe loses a `srcdoc` attribute, which would otherwise render before consent. An iframe the build cannot reach, such as one inside a `<select>`, keeps its live `src`; the build warns with the page and the host, so move it out or use the mixin below.
+`<embed>`, `<object>`, `<video>` and `<audio>` are gated the same way when they load from a configured host — through `src`, `data` or `poster`, or for video and audio through a `<source>` or `<track>` child. Their loading attributes become `data-consent-src`, `data-consent-data`, `data-consent-poster` and `data-consent-srcset` until consent, and the same placeholder follows them. An element mixing services of two categories fails the build: split it into one element per category. Images (`<img>`, `<picture>`) are not gated. Details: [ROADMAP.md](ROADMAP.md#gated-media).
+
+A gated iframe loses a `srcdoc` attribute, which would otherwise render before consent. An iframe or media element the build cannot reach, such as one inside a `<select>`, keeps its live `src`; the build warns with the page and the host, so move it out or use the mixin below.
 
 To place an embed in a Pug view instead, use the mixin from the published `embed` view. It renders exactly the same placeholder:
 
@@ -247,10 +249,13 @@ The build writes it on one line; it is shown indented here.
 
 | attribute | on | meaning |
 |---|---|---|
-| `data-consent="<id>"` | gated script, gated iframe, embed wrapper | category that activates it |
+| `data-consent="<id>"` | gated script, gated iframe or media element, embed wrapper | category that activates it |
 | `data-src` | gated script | script URL |
 | `data-type="module"` | gated script | activate as a module |
-| `data-consent-src` | gated iframe | iframe URL |
+| `data-consent-src` | gated iframe, `<embed>`, `<video>`, `<audio>`, their `<source>` / `<track>` | the `src` |
+| `data-consent-data` | gated `<object>` | the `data` URL |
+| `data-consent-poster` | gated `<video>` | the `poster` URL |
+| `data-consent-srcset` | `<source>` in a gated `<video>` / `<audio>` | the `srcset` |
 | `data-consent-embed` | placeholder wrapper | one two-click embed |
 | `data-consent-load` | button in a placeholder | load this one embed now (D3) |
 | `data-consent-open` | any element | open the settings dialog (D4) |
@@ -261,7 +266,7 @@ The build writes it on one line; it is shown indented here.
 | `data-consent-save` | button in the dialog | store exactly the ticked categories |
 | `data-consent-category="<id>"` | checkbox in the dialog | one category |
 | `data-consent-dismiss` | "Got it" in the notice | store the notice as seen |
-| `data-consent-state="active"` | gated script / iframe, set by the runtime | already activated (never twice) |
+| `data-consent-state="active"` | gated script / iframe / media element, set by the runtime | already activated (never twice) |
 
 ### BEM blocks
 

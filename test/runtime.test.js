@@ -3,7 +3,7 @@ import path from 'path'
 import { Window } from 'happy-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import { STORAGE_KEY } from '../src/app-consent.js'
-import { renderPlaceholder } from '../src/placeholder.js'
+import { inertStartTag, renderControls, renderPlaceholder, wrapperStart } from '../src/placeholder.js'
 
 // The runtime runs in a happy-dom window per page load. Inline gated scripts
 // really execute (they push to `window.log`); external ones never touch the
@@ -28,6 +28,27 @@ const embed = (src, category = 'media') =>
         texts: TEXTS,
         attributes: { title: 'Video' },
     })
+
+const YOUTUBE = { name: 'YouTube', provider: 'Google', privacyUrl: null }
+
+/** A gated non-iframe element as the rewrite emits it: wrapper, inert element, controls. */
+const gated = (tag, attributes, inner = '', category = 'media') =>
+    wrapperStart(category) +
+    inertStartTag(tag, attributes, category) +
+    (tag === 'embed' ? '' : `${inner}</${tag}>`) +
+    renderControls({ service: YOUTUBE, texts: TEXTS }) +
+    '</div>'
+
+const MEDIA =
+    gated('embed', { id: 'e', src: 'https://yt.test/e.mp4', type: 'video/mp4' }) +
+    gated('object', { id: 'o', data: 'https://yt.test/o' }, '<p>Fallback</p>') +
+    gated('video', { id: 'v', controls: '', poster: 'https://yt.test/p.jpg' },
+        inertStartTag('source', { id: 's', src: 'https://yt.test/v.webm', type: 'video/webm' }) +
+        inertStartTag('source', { id: 's2', srcset: 'https://yt.test/v.mp4' }) +
+        inertStartTag('track', { id: 't', src: 'https://yt.test/c.vtt', kind: 'captions' })) +
+    gated('audio', { id: 'a', src: 'https://yt.test/a.mp3' })
+
+const LOADING = ['src', 'data', 'poster', 'srcset']
 
 const banner = ({ revision = 1, categories = 'analytics media' } = {}) =>
     `<div data-consent-banner data-consent-revision="${revision}" data-consent-categories="${categories}" hidden>` +
@@ -133,6 +154,9 @@ function expectNothingActive(window) {
     for (const iframe of iframes(window)) {
         expect(iframe.hasAttribute('src')).toBe(false)
         expect(iframe.hidden).toBe(true)
+    }
+    for (const element of document.querySelectorAll('embed, object, video, audio, source, track')) {
+        for (const name of LOADING) expect(element.hasAttribute(name), `${element.id} ${name}`).toBe(false)
     }
 }
 
@@ -552,6 +576,69 @@ describe('two-click placeholder (D3)', () => {
         window.document.querySelector('.nera-consent-embed__settings').click()
         expect(window.document.querySelector('[data-consent-dialog]').open).toBe(true)
         expect(iframes(window).some((iframe) => iframe.hasAttribute('src'))).toBe(false)
+    })
+})
+
+describe('gated media (ROADMAP "Gated media")', () => {
+    /** Count `load()` calls per media element id. */
+    const countLoads = (window) => {
+        window.loads = []
+        const { prototype } = window.HTMLMediaElement
+        const original = prototype.load
+        prototype.load = function () {
+            window.loads.push(this.id)
+            return original.call(this)
+        }
+    }
+
+    it('keeps embed, object, video, audio, source and track inert before a choice and after Reject all', () => {
+        const window = load(banner() + MEDIA, { before: countLoads })
+        expectNothingActive(window)
+        click(window, 'reject')
+        expectNothingActive(window)
+        expect(window.loads).toEqual([])
+        for (const id of ['e', 'o', 'v', 'a']) expect(window.document.getElementById(id).hidden).toBe(true)
+    })
+
+    it('restores every loading attribute on Accept all and reloads the media', () => {
+        const window = load(banner() + MEDIA, { before: countLoads })
+        click(window, 'accept')
+
+        const { document } = window
+        const attribute = (id, name) => document.getElementById(id).getAttribute(name)
+        expect(attribute('e', 'src')).toBe('https://yt.test/e.mp4')
+        expect(attribute('o', 'data')).toBe('https://yt.test/o')
+        expect(attribute('v', 'poster')).toBe('https://yt.test/p.jpg')
+        expect(attribute('s', 'src')).toBe('https://yt.test/v.webm')
+        expect(attribute('s2', 'srcset')).toBe('https://yt.test/v.mp4')
+        expect(attribute('t', 'src')).toBe('https://yt.test/c.vtt')
+        expect(attribute('a', 'src')).toBe('https://yt.test/a.mp3')
+        expect(window.loads).toEqual(['v', 'a'])
+        for (const id of ['e', 'o', 'v', 'a']) {
+            const element = document.getElementById(id)
+            expect(element.hidden).toBe(false)
+            expect(element.getAttribute('data-consent-state')).toBe('active')
+            expect(element.parentElement.querySelector('.nera-consent-embed__placeholder').hidden).toBe(true)
+        }
+    })
+
+    it('activates nothing of another category', () => {
+        const window = load(banner() + gated('audio', { id: 'a', src: 'https://yt.test/a.mp3' }, '', 'analytics'), { stored: choice(['media']) })
+        expect(window.document.getElementById('a').hasAttribute('src')).toBe(false)
+    })
+
+    it('loads only the clicked element, not a gated embed in its fallback content', () => {
+        const nested = gated('object', { id: 'o', data: 'https://yt.test/o' }, embed('https://yt.test/inner'))
+        const window = load(banner() + nested)
+        const { document } = window
+        const [inner, outer] = [...document.querySelectorAll('[data-consent-load]')]
+        outer.click()
+
+        expect(document.getElementById('o').getAttribute('data')).toBe('https://yt.test/o')
+        expect(iframes(window)[0].hasAttribute('src')).toBe(false)
+        inner.click()
+        expect(iframes(window)[0].getAttribute('src')).toBe('https://yt.test/inner')
+        expect(window.localStorage.getItem(STORAGE_KEY)).toBe(null)
     })
 })
 

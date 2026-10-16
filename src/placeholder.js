@@ -4,7 +4,28 @@ import { withBasePath } from './app-consent.js'
 // iframes and the placeholder"). The iframe rewrite (`getMetaData`) calls it;
 // the Pug embed mixin (`views/embed.pug`) cannot import it and mirrors it
 // instead, held byte-identical by `test/templates.test.js` — change both.
-// The iframe is inert as rendered: no `src`, only `data-consent-src`.
+// The iframe is inert as rendered: no `src`, only `data-consent-src`. Gated
+// `<embed>`, `<object>`, `<video>` and `<audio>` (rewrite only, ROADMAP
+// "Gated media") share the wrapper and the controls; `inertStartTag` makes
+// their loading attributes inert.
+
+/**
+ * The attributes through which each gated element (and a gated media
+ * element's `<source>` / `<track>` children) loads something. Until consent
+ * each is renamed to `data-consent-<name>`; the runtime renames it back.
+ */
+export const LOADING_ATTRIBUTES = {
+    iframe: ['src'],
+    embed: ['src'],
+    object: ['data'],
+    video: ['src', 'poster'],
+    audio: ['src'],
+    source: ['src', 'srcset'],
+    track: ['src'],
+}
+
+/** The inert name of a loading attribute (`src` → `data-consent-src`). */
+const inertName = (name) => `data-consent-${name}`
 
 // Attributes the renderer sets itself; a copy from the source iframe would
 // duplicate or contradict them. `srcdoc` goes too: it renders while the
@@ -71,6 +92,23 @@ export function renderPlaceholder({
     }
     iframe += ` hidden>${inner}</iframe>`
 
+    return wrapperStart(category) + iframe + renderControls({ service, texts }) + '</div>'
+}
+
+/** The opening tag of the placeholder wrapper, `<div class="nera-consent-embed" …>`. */
+export const wrapperStart = (category) =>
+    `<div class="nera-consent-embed" data-consent-embed data-consent="${escapeHtml(category)}">`
+
+/**
+ * The placeholder's visible part, `div.nera-consent-embed__placeholder`, in
+ * the element list the ROADMAP fixes.
+ *
+ * @param {object} placeholder
+ * @param {{ name: string, provider: string, privacyUrl: string|null }} placeholder.service
+ * @param {Record<string, string>} placeholder.texts
+ * @returns {string}
+ */
+export function renderControls({ service, texts }) {
     const names = { service: service.name, provider: service.provider }
     const text = fillIn(texts.placeholder_text, names, (escaped) => `<strong>${escaped}</strong>`)
     const load = fillIn(texts.placeholder_load, names)
@@ -79,14 +117,43 @@ export function renderPlaceholder({
         : ''
 
     return (
-        `<div class="nera-consent-embed" data-consent-embed data-consent="${escapeHtml(category)}">` +
-        iframe +
         '<div class="nera-consent-embed__placeholder">' +
         `<p class="nera-consent-embed__text">${text}</p>` +
         `<button class="nera-consent-embed__load" type="button" data-consent-load>${load}</button>` +
         privacy +
         `<button class="nera-consent-embed__settings" type="button" data-consent-open>${escapeHtml(texts.placeholder_settings)}</button>` +
-        '</div>' +
         '</div>'
     )
+}
+
+/**
+ * The inert start tag of a gated element other than an iframe, or of a gated
+ * media element's `<source>` / `<track>` child: every loading attribute is
+ * renamed in place, every other attribute kept in source order. With a
+ * `category` (the gated element itself) it gets `data-consent` first and
+ * `hidden` last, as the iframe does; a child gets neither. Attributes that
+ * would contradict these (`data-consent`, `hidden`, an inert name already
+ * present) are dropped.
+ *
+ * @param {string} tag lower-case tag name, a key of `LOADING_ATTRIBUTES`
+ * @param {Record<string, string>} attributes the source element's attributes
+ * @param {string} [category]
+ * @returns {string}
+ */
+export function inertStartTag(tag, attributes, category) {
+    const loading = LOADING_ATTRIBUTES[tag]
+    const dropped = new Set(loading.map(inertName))
+    if (category !== undefined) {
+        dropped.add('data-consent')
+        dropped.add('hidden')
+    }
+
+    let html = `<${tag}`
+    if (category !== undefined) html += attribute('data-consent', category)
+    for (const [name, value] of Object.entries(attributes)) {
+        const lower = name.toLowerCase()
+        if (dropped.has(lower)) continue
+        html += attribute(loading.includes(lower) ? inertName(lower) : name, value)
+    }
+    return html + (category !== undefined ? ' hidden>' : '>')
 }

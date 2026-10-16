@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url'
 import { buildAppConsent } from './src/app-consent.js'
 import { loadConfig } from './src/config.js'
 import { assertCoreVersion, coreVersion } from './src/guard.js'
-import { findLiveGatedIframes, rewriteIframes } from './src/rewrite.js'
+import { findLiveGatedEmbeds, rewriteEmbeds } from './src/rewrite.js'
 import { warn } from './src/warn.js'
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets')
@@ -33,11 +33,12 @@ export function getAppData({ app, pagesData }) {
 const pageName = (page) => page.meta?.href || 'a page'
 
 /**
- * Replaces every iframe whose host a service gates with the two-click
- * placeholder (D2), in the page's language, and warns about any gated iframe
- * the rewrite could not reach. Pages without such an iframe are returned as
- * the same object. Fails the build on a core too old to call
- * `getAssets`, unless the site has no consent UI at all (mode 'none').
+ * Replaces every iframe, `<embed>`, `<object>`, `<video>` and `<audio>` that
+ * loads from a host a service gates with the two-click placeholder (D2), in
+ * the page's language, and warns about any gated element the rewrite could
+ * not reach. Pages without such an element are returned as the same object.
+ * Fails the build on a core too old to call `getAssets`, unless the site has
+ * no consent UI at all (mode 'none').
  *
  * @param {{ app: object, pagesData: object[] }} data
  * @returns {object[]}
@@ -51,9 +52,16 @@ export function getMetaData({ app, pagesData }) {
     return pagesData.map((page) => {
         const lang = page.meta?.lang || app.lang
         const locale = consent.locales[lang] || consent.locales.en
-        const content = rewriteIframes(page.content, { hosts: consent.hosts, locale })
-        for (const host of findLiveGatedIframes(content, consent.hosts)) {
-            warn(`${pageName(page)}: an <iframe> from ${host} escaped the rewrite and may load before consent (inside <select>, or other markup the HTML parser reads differently) — move it out, or place it with the +consent-embed mixin`)
+        const onWarning = (message) => warn(`${pageName(page)}: ${message}`)
+        let content
+        try {
+            content = rewriteEmbeds(page.content, { hosts: consent.hosts, locale })
+        } catch (error) {
+            throw new Error(`plugin-consent: ${pageName(page)}: ${error.message}`, { cause: error })
+        }
+        for (const { tag, host } of findLiveGatedEmbeds(content, consent.hosts)) {
+            const mixin = tag === 'iframe' ? ', or place it with the +consent-embed mixin' : ''
+            onWarning(`an <${tag}> from ${host} escaped the rewrite and may load before consent (inside <select>, or other markup the HTML parser reads differently) — move it out${mixin}`)
         }
         return content === page.content ? page : { ...page, content }
     })
