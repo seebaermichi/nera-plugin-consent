@@ -35,3 +35,4 @@ build/
 .tmp/
 plans/
 .claude/.work-issue-active
+.playwright-mcp/

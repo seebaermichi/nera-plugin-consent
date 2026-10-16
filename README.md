@@ -36,8 +36,8 @@ These hold whatever `config/consent.yaml` says. No key exists that weakens them;
 
 ```bash
 npm install @nera-static/plugin-consent
-npx nera-consent              # copies the documented config/consent.yaml
-npx nera-consent-templates    # copies the views to views/vendor/plugin-consent/
+npx nera-consent-config    # copies the documented config/consent.yaml
+npx nera-consent           # copies the views to views/vendor/plugin-consent/
 ```
 
 Nera detects the plugin on `nera build`. `config/consent.yaml` is optional: without it the site is in notice mode. Both commands skip a file or folder that already exists; `--force` overwrites it (and discards your edits).
@@ -64,6 +64,7 @@ html(lang=meta.lang || app.lang)
 - `head` emits your configured scripts, inert. Put it inside `<head>`.
 - `banner`, `settings` and `notice` go at the end of `<body>`. Each renders only in its own mode, so include all three.
 - `consent.js` and `consent.css` are copied to `public/_nera/` on every build and get `base_path` and asset hashing like any other asset. Load the runtime with `defer`.
+- While the banner or notice shows, `consent.css` sets `padding-bottom` on `html[data-consent-reserve] body` so the page can scroll clear of it. That rule overrides your own `body` `padding-bottom` for as long as either shows.
 
 ## The settings link
 

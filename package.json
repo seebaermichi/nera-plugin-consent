@@ -67,7 +67,7 @@
         "vitest": "^5.0.5"
     },
     "bin": {
-        "nera-consent": "bin/publish-config.js",
-        "nera-consent-templates": "bin/publish-template.js"
+        "nera-consent": "bin/publish-template.js",
+        "nera-consent-config": "bin/publish-config.js"
     }
 }

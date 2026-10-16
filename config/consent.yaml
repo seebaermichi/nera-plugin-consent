@@ -1,5 +1,5 @@
 # @nera-static/plugin-consent — every key is optional.
-# Copy this file to your site's config/ folder (npx nera-consent) and edit it
+# Copy this file to your site's config/ folder (npx nera-consent-config) and edit it
 # there. The texts the plugin ships are defaults, not legal advice.
 #
 # Without categories the site shows only a short info notice ("only technically
