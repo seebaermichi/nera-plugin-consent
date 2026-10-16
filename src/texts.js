@@ -2,7 +2,7 @@ import { warn } from './warn.js'
 
 // Built-in texts (ROADMAP "Texts"). They are defaults, not legal advice: a
 // site owner reviews them like any other text on the site. `{service}` and
-// `{provider}` in the placeholder text are filled in per embed.
+// `{provider}` in the placeholder texts are filled in per embed.
 
 export const FALLBACK_LANG = 'en'
 
@@ -34,7 +34,7 @@ export const BUILTIN_TEXTS = {
         notice_dismiss: 'Got it',
         placeholder_text:
             'This content is provided by {service}. Loading it connects to {provider}.',
-        placeholder_load: 'Load content',
+        placeholder_load: 'Load {service}',
         placeholder_settings: 'Privacy settings',
         privacy_link: 'Privacy policy',
     },
@@ -65,7 +65,7 @@ export const BUILTIN_TEXTS = {
         notice_dismiss: 'Verstanden',
         placeholder_text:
             'Dieser Inhalt wird von {service} bereitgestellt. Beim Laden wird eine Verbindung zu {provider} hergestellt.',
-        placeholder_load: 'Inhalt laden',
+        placeholder_load: '{service} laden',
         placeholder_settings: 'Datenschutz-Einstellungen',
         privacy_link: 'Datenschutzerklärung',
     },

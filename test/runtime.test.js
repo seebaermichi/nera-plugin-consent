@@ -15,7 +15,7 @@ const RUNTIME = fs.readFileSync(path.resolve('assets/consent.js'), 'utf8')
 
 const TEXTS = {
     placeholder_text: 'This content is provided by {service}. Loading it connects to {provider}.',
-    placeholder_load: 'Load content',
+    placeholder_load: 'Load {service}',
     placeholder_settings: 'Privacy settings',
     service_privacy: 'Privacy policy of the provider',
 }
@@ -488,6 +488,45 @@ describe('activated scripts', () => {
         runtime.textContent = RUNTIME
         window.document.body.appendChild(runtime)
         expect(window.log).toEqual(['a1', 'a2'])
+    })
+})
+
+describe('reserved space (WCAG 2.4.11)', () => {
+    /** Place the root's top edge at `top` px, as a fixed banner would sit. */
+    const placeRoot = (selector, top) => (window) => {
+        window.document.querySelector(selector).getBoundingClientRect = () => ({ top })
+    }
+
+    const reserved = (window) => {
+        const html = window.document.documentElement
+        return html.hasAttribute('data-consent-reserve')
+            ? html.style.getPropertyValue('--nera-consent-banner-height')
+            : null
+    }
+
+    it('reserves the space the shown banner covers, follows a resize and frees it on a choice', () => {
+        const window = load(PAGE, { before: placeRoot('[data-consent-banner]', 300.4) })
+        expect(reserved(window)).toBe(`${Math.ceil(window.innerHeight - 300.4)}px`)
+
+        window.document.querySelector('[data-consent-banner]').getBoundingClientRect = () => ({ top: 100 })
+        window.dispatchEvent(new window.Event('resize'))
+        expect(reserved(window)).toBe(`${window.innerHeight - 100}px`)
+
+        click(window, 'reject')
+        expect(reserved(window)).toBe(null)
+        expect(window.document.documentElement.style.getPropertyValue('--nera-consent-banner-height')).toBe('')
+    })
+
+    it('reserves nothing when a stored choice keeps the banner hidden', () => {
+        const window = load(PAGE, { stored: choice([]), before: placeRoot('[data-consent-banner]', 300) })
+        expect(reserved(window)).toBe(null)
+    })
+
+    it('reserves the space of the notice until it is dismissed', () => {
+        const window = load(notice(), { before: placeRoot('[data-consent-notice]', 500) })
+        expect(reserved(window)).toBe(`${window.innerHeight - 500}px`)
+        click(window, 'dismiss')
+        expect(reserved(window)).toBe(null)
     })
 })
 

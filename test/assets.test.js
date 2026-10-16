@@ -73,6 +73,11 @@ describe('assets/consent.css', () => {
         expect(Object.keys(DEFAULTS).filter((name) => /accept|reject/.test(name))).toEqual([])
     })
 
+    it('turns the reserved height into body padding and scroll padding (WCAG 2.4.11)', () => {
+        expect(CSS).toMatch(/html\[data-consent-reserve\] \{\s*scroll-padding-bottom: var\(--nera-consent-banner-height, 0px\);/)
+        expect(CSS).toMatch(/html\[data-consent-reserve\] body \{\s*padding-bottom: var\(--nera-consent-banner-height, 0px\);/)
+    })
+
     it('lets the hidden attribute win over author display rules', () => {
         expect(CSS).toMatch(/\.nera-consent\[hidden\][^{]*\{\s*display: none !important;/)
     })

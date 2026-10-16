@@ -33,6 +33,17 @@
 
 /* ---- banner and notice ------------------------------------------------- */
 
+/* While the banner or notice shows, the runtime sets the attribute and the
+ * height of the space it covers, so the page can scroll its last content and
+ * any focused element clear of it (WCAG 2.4.11). */
+html[data-consent-reserve] {
+    scroll-padding-bottom: var(--nera-consent-banner-height, 0px);
+}
+
+html[data-consent-reserve] body {
+    padding-bottom: var(--nera-consent-banner-height, 0px);
+}
+
 .nera-consent {
     position: fixed;
     z-index: var(--nera-consent-z-index, 1000);
@@ -116,9 +127,37 @@
     background: var(--nera-consent-backdrop, rgb(0 0 0 / 0.5));
 }
 
+.nera-consent-dialog__form {
+    position: relative;
+    margin: 0;
+}
+
+/* Close (×) changes no stored choice; it is not a first-layer button. */
+.nera-consent-dialog__close {
+    position: absolute;
+    top: -0.5rem;
+    right: -0.5rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nera-consent-fg, #1f2937);
+    font: inherit;
+    font-size: 1.5em;
+    line-height: 1;
+    cursor: pointer;
+}
+
 .nera-consent-dialog__title {
-    margin: 0 0 0.5rem;
+    margin: 0 2.5rem 0.5rem 0;
     font-size: 1.25em;
+}
+
+.nera-consent-dialog__text,
+.nera-consent-dialog__description {
+    margin: 0.5rem 0 0;
 }
 
 .nera-consent-dialog__category {
@@ -135,6 +174,10 @@
     font-weight: 600;
 }
 
+.nera-consent-dialog__status {
+    font-weight: 400;
+}
+
 .nera-consent-dialog__checkbox {
     width: 1.25rem;
     height: 1.25rem;
@@ -143,6 +186,27 @@
 
 .nera-consent-dialog__service {
     margin: 0.75rem 0 0;
+}
+
+.nera-consent-dialog__service-name {
+    margin: 0;
+    font-size: 1em;
+}
+
+.nera-consent-dialog__details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 0.75rem;
+    margin: 0.25rem 0;
+}
+
+.nera-consent-dialog__details dd {
+    margin: 0;
+}
+
+.nera-consent-dialog__table caption {
+    font-weight: 600;
+    text-align: left;
 }
 
 .nera-consent-dialog__table {

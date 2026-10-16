@@ -1,0 +1,67 @@
+//- @nera-static/plugin-consent: the settings dialog (ROADMAP "Markup contract").
+//-
+//-     include /vendor/plugin-consent/settings
+//-
+//- Place it at the end of <body>, next to banner.pug. Renders only in
+//- 'banner' mode. A native <dialog>: the runtime opens it modally from any
+//- `[data-consent-open]` element (D4), which moves focus in, keeps it there
+//- and closes on Escape; focus returns to the opener on close. Close is a
+//- native `<form method="dialog">` submit and changes no stored choice. No
+//- category checkbox is ever rendered `checked`: the runtime ticks the stored
+//- choice on open, so nothing is pre-selected (legal floor).
+if app.consent && app.consent.mode === 'banner'
+    - const consentSettings = app.consent.locales[(meta && meta.lang) || app.lang] || app.consent.locales.en
+    - const consentTexts = consentSettings.texts
+    dialog.nera-consent-dialog(data-consent-dialog aria-labelledby='nera-consent-dialog-title')
+        form.nera-consent-dialog__form(method='dialog')
+            button.nera-consent-dialog__close(type='submit' aria-label=consentTexts.close title=consentTexts.close)
+                span(aria-hidden='true') ×
+            h2.nera-consent-dialog__title#nera-consent-dialog-title= consentTexts.dialog_title
+            p.nera-consent-dialog__text
+                = consentTexts.dialog_text
+                if consentSettings.privacyUrl
+                    = ' '
+                    a.nera-consent-dialog__link(href=consentSettings.privacyUrl)= consentTexts.privacy_link
+            .nera-consent-dialog__category
+                label.nera-consent-dialog__label
+                    input.nera-consent-dialog__checkbox(type='checkbox' checked disabled)
+                    span= consentTexts.necessary_label
+                    = ' '
+                    span.nera-consent-dialog__status (#{consentTexts.always_active})
+                p.nera-consent-dialog__description= consentTexts.necessary_description
+            each category in consentSettings.categories
+                .nera-consent-dialog__category
+                    label.nera-consent-dialog__label
+                        input.nera-consent-dialog__checkbox(type='checkbox' name='nera-consent-' + category.id data-consent-category=category.id)
+                        span= category.label
+                    if category.description
+                        p.nera-consent-dialog__description= category.description
+                    each service in category.services
+                        .nera-consent-dialog__service
+                            h3.nera-consent-dialog__service-name= service.name
+                            dl.nera-consent-dialog__details
+                                dt= consentTexts.service_provider
+                                dd= service.provider
+                                dt= consentTexts.service_purpose
+                                dd= service.purpose
+                            if service.privacyUrl
+                                p
+                                    a.nera-consent-dialog__link(href=service.privacyUrl rel='noopener')= consentTexts.service_privacy
+                            if service.cookies.length
+                                table.nera-consent-dialog__table
+                                    caption= consentTexts.cookies_heading
+                                    thead
+                                        tr
+                                            th(scope='col')= consentTexts.cookie_name
+                                            th(scope='col')= consentTexts.cookie_duration
+                                            th(scope='col')= consentTexts.cookie_purpose
+                                    tbody
+                                        each cookie in service.cookies
+                                            tr
+                                                td= cookie.name
+                                                td= cookie.duration
+                                                td= cookie.purpose
+            .nera-consent-dialog__actions
+                button.nera-consent-dialog__button(type='button' data-consent-accept-all)= consentTexts.accept_all
+                button.nera-consent-dialog__button(type='button' data-consent-reject-all)= consentTexts.reject_all
+                button.nera-consent-dialog__button(type='button' data-consent-save)= consentTexts.save

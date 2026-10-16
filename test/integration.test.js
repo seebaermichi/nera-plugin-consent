@@ -119,7 +119,7 @@ describe.each([
 
     it('renders the placeholder in the page language', () => {
         const $ = load(read(root, 'video.html'))
-        expect($('[data-consent-load]').first().text()).toBe('Inhalt laden')
+        expect($('[data-consent-load]').first().text()).toBe('YouTube laden')
     })
 
     it('keeps ungated iframes and the surrounding content', () => {

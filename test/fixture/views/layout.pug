@@ -1,0 +1,22 @@
+doctype html
+html(lang=meta.lang || app.lang)
+    head
+        meta(charset='utf-8')
+        meta(name='viewport' content='width=device-width, initial-scale=1')
+        title= meta.title
+        link(rel='stylesheet' href='/_nera/consent.css')
+        include /vendor/plugin-consent/head
+        script(src='/_nera/consent.js' defer)
+    body
+        a(href='#main') Skip to content
+        main#main
+            h1= meta.title
+            != content
+            block main
+        footer
+            a(href=meta.lang === 'de' ? '/de/datenschutz.html' : '/privacy.html')= meta.lang === 'de' ? 'Datenschutz' : 'Privacy policy'
+            = ' · '
+            a(href=meta.lang === 'de' ? '/de/datenschutz.html' : '/privacy.html' data-consent-open)= meta.lang === 'de' ? 'Cookie-Einstellungen' : 'Privacy settings'
+        include /vendor/plugin-consent/banner
+        include /vendor/plugin-consent/settings
+        include /vendor/plugin-consent/notice

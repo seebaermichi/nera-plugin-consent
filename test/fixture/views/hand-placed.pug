@@ -1,0 +1,11 @@
+extends layout.pug
+
+include /vendor/plugin-consent/embed
+
+block main
+    +consent-embed({
+        category: 'media',
+        service: 'YouTube',
+        src: 'https://www.youtube-nocookie.com/embed/hand',
+        attributes: { title: 'A hand-placed video', width: 560, height: 315, allowfullscreen: true },
+    })

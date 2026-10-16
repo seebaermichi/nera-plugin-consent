@@ -1,0 +1,29 @@
+//- @nera-static/plugin-consent: the first layer (ROADMAP "Markup contract").
+//-
+//-     include /vendor/plugin-consent/banner
+//-
+//- Place it at the end of <body>, next to settings.pug. Renders only in
+//- 'banner' mode (at least one category). It is rendered `hidden`; the runtime
+//- shows it while the visitor has made no choice. Accept all, Reject all and
+//- Settings are fixed in this order and share one class (legal floor, D6):
+//- keep all three when you edit a published copy, and keep every
+//- `data-consent*` attribute, which the runtime binds to (D7).
+if app.consent && app.consent.mode === 'banner'
+    - const consentBanner = app.consent.locales[(meta && meta.lang) || app.lang] || app.consent.locales.en
+    section.nera-consent(
+        data-consent-banner
+        data-consent-revision=app.consent.revision
+        data-consent-categories=consentBanner.categories.map((category) => category.id).join(' ')
+        aria-labelledby='nera-consent-title'
+        hidden
+    )
+        h2.nera-consent__title#nera-consent-title= consentBanner.texts.banner_title
+        p.nera-consent__text
+            = consentBanner.texts.banner_text
+            if consentBanner.privacyUrl
+                = ' '
+                a.nera-consent__link(href=consentBanner.privacyUrl)= consentBanner.texts.privacy_link
+        .nera-consent__actions
+            button.nera-consent__button(type='button' data-consent-accept-all)= consentBanner.texts.accept_all
+            button.nera-consent__button(type='button' data-consent-reject-all)= consentBanner.texts.reject_all
+            button.nera-consent__button(type='button' data-consent-open)= consentBanner.texts.settings

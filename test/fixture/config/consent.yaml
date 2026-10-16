@@ -1,0 +1,35 @@
+# The fixture of test/fixture.test.js: every view, both categories the
+# defaults know, a gated external and inline script, and gated embeds.
+revision: 1
+privacy_url:
+    en: /privacy.html
+    de: /de/datenschutz.html
+categories:
+    - id: analytics
+      services:
+          - name: Matomo
+            provider: Example Analytics GmbH, Berlin
+            purpose:
+                en: Counts visits without building profiles.
+                de: Zählt Besuche, ohne Profile zu bilden.
+            privacy_url: https://stats.example.com/privacy
+            cookies:
+                - name: _pk_id
+                  duration:
+                      en: 13 months
+                      de: 13 Monate
+                  purpose: Recognises returning visitors.
+            scripts:
+                - inline: |
+                      window.consentFixture = (window.consentFixture || []).concat('</script> & <!-- stays inside');
+                - src: https://stats.example.com/matomo.js
+                  async: true
+    - id: media
+      services:
+          - name: YouTube
+            provider: Google Ireland Limited, Dublin
+            purpose:
+                en: Shows embedded videos.
+                de: Zeigt eingebettete Videos.
+            privacy_url: https://policies.google.com/privacy
+            hosts: [youtube.com, youtube-nocookie.com]

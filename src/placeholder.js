@@ -1,9 +1,10 @@
 import { withBasePath } from './app-consent.js'
 
-// D2 — the one renderer of the two-click placeholder. The iframe rewrite
-// (`getMetaData`) and the Pug embed mixin (slice 4) both call it, so the
-// public-contract markup (ROADMAP "Gated iframes and the placeholder") exists
-// once. The iframe is inert as rendered: no `src`, only `data-consent-src`.
+// D2 — the definition of the two-click placeholder markup (ROADMAP "Gated
+// iframes and the placeholder"). The iframe rewrite (`getMetaData`) calls it;
+// the Pug embed mixin (`views/embed.pug`) cannot import it and mirrors it
+// instead, held byte-identical by `test/templates.test.js` — change both.
+// The iframe is inert as rendered: no `src`, only `data-consent-src`.
 
 // Attributes the renderer sets itself; a copy from the source iframe would
 // duplicate or contradict them.
@@ -20,15 +21,16 @@ const attribute = (name, value) =>
     value === '' ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`
 
 /**
- * `placeholder_text` with `{service}` and `{provider}` filled in, escaped;
- * the provider is set in `<strong>`, since it is who the visitor connects to.
+ * A placeholder text with `{service}` and `{provider}` filled in, escaped;
+ * `wrapProvider` gets the escaped provider (`placeholder_text` sets it in
+ * `<strong>`, since it is who the visitor connects to).
  */
-function placeholderText(template, { service, provider }) {
+function fillIn(template, { service, provider }, wrapProvider = (escaped) => escaped) {
     return template
         .split(/(\{service\}|\{provider\})/)
         .map((part) => {
             if (part === '{service}') return escapeHtml(service)
-            if (part === '{provider}') return `<strong>${escapeHtml(provider)}</strong>`
+            if (part === '{provider}') return wrapProvider(escapeHtml(provider))
             return escapeHtml(part)
         })
         .join('')
@@ -67,10 +69,9 @@ export function renderPlaceholder({
     }
     iframe += ` hidden>${inner}</iframe>`
 
-    const text = placeholderText(texts.placeholder_text, {
-        service: service.name,
-        provider: service.provider,
-    })
+    const names = { service: service.name, provider: service.provider }
+    const text = fillIn(texts.placeholder_text, names, (escaped) => `<strong>${escaped}</strong>`)
+    const load = fillIn(texts.placeholder_load, names)
     const privacy = service.privacyUrl
         ? `<a class="nera-consent-embed__privacy" href="${escapeHtml(service.privacyUrl)}" rel="noopener">${escapeHtml(texts.service_privacy)}</a>`
         : ''
@@ -80,7 +81,7 @@ export function renderPlaceholder({
         iframe +
         '<div class="nera-consent-embed__placeholder">' +
         `<p class="nera-consent-embed__text">${text}</p>` +
-        `<button class="nera-consent-embed__load" type="button" data-consent-load>${escapeHtml(texts.placeholder_load)}</button>` +
+        `<button class="nera-consent-embed__load" type="button" data-consent-load>${load}</button>` +
         privacy +
         `<button class="nera-consent-embed__settings" type="button" data-consent-open>${escapeHtml(texts.placeholder_settings)}</button>` +
         '</div>' +

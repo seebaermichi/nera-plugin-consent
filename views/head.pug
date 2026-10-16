@@ -1,0 +1,31 @@
+//- @nera-static/plugin-consent: the configured scripts, gated (ROADMAP
+//- "Gated scripts").
+//-
+//-     head
+//-         include /vendor/plugin-consent/head
+//-
+//- Emits every `scripts` entry of config/consent.yaml (`app.consent.scripts`)
+//- as an inert `<script type="text/plain" data-consent="<category>">`; the
+//- runtime activates it once its category is granted. Inline code is written
+//- raw (a script's text is never entity-decoded), with `</script` and `<!--`
+//- escaped so it cannot end the element early.
+if app.consent && app.consent.scripts && app.consent.scripts.length
+    - const consentScriptCode = (code) => code.replace(/<(\/script|!--)/gi, '<\\$1')
+    each consentScript in app.consent.scripts
+        if typeof consentScript.src === 'string'
+            script(
+                type='text/plain'
+                data-consent=consentScript.category
+                data-type=consentScript.module ? 'module' : undefined
+                data-src=consentScript.src
+                async=consentScript.async
+                defer=consentScript.defer
+            )
+        else
+            script(
+                type='text/plain'
+                data-consent=consentScript.category
+                data-type=consentScript.module ? 'module' : undefined
+                async=consentScript.async
+                defer=consentScript.defer
+            )!= consentScriptCode(consentScript.inline)

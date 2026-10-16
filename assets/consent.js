@@ -25,6 +25,27 @@
         : []
     const dialog = document.querySelector('[data-consent-dialog]')
 
+    // ---- reserved space ----------------------------------------------------
+
+    // While the banner or notice shows, the page keeps room for it below its
+    // content (`consent.css`), so the fixed root never hides the last content
+    // or a focused element for good (WCAG 2.4.11).
+    const RESERVE_ATTRIBUTE = 'data-consent-reserve'
+    const RESERVE_PROPERTY = '--nera-consent-banner-height'
+
+    /** Reserve the space from the shown root's top edge to the viewport's bottom, or none. */
+    function reserveSpace() {
+        const html = document.documentElement
+        if (!root || root.hidden) {
+            html.removeAttribute(RESERVE_ATTRIBUTE)
+            html.style.removeProperty(RESERVE_PROPERTY)
+            return
+        }
+        const height = Math.max(0, Math.ceil(window.innerHeight - root.getBoundingClientRect().top))
+        html.style.setProperty(RESERVE_PROPERTY, `${height}px`)
+        html.setAttribute(RESERVE_ATTRIBUTE, '')
+    }
+
     // ---- storage -----------------------------------------------------------
 
     const onlyConfigured = (ids) => configured.filter((id) => ids.includes(id))
@@ -70,6 +91,7 @@
             // Storage blocked (private window): the choice stays in memory.
         }
         root.hidden = true
+        reserveSpace()
         // Grants more → activates now; grants less → from the next page load (O5).
         activateGranted()
         document.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: copy(current) }))
@@ -237,5 +259,11 @@
     })
 
     if (root) root.hidden = current !== null
+    reserveSpace()
+    if (root && !root.hidden) {
+        // The root's height follows its text wrapping; its top, the viewport.
+        if (typeof ResizeObserver === 'function') new ResizeObserver(reserveSpace).observe(root)
+        window.addEventListener('resize', reserveSpace)
+    }
     activateGranted()
 })()

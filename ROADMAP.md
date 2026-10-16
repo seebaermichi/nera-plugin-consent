@@ -80,7 +80,9 @@ It fixes the config schema, the `app.consent` shape, the markup contract, the st
 
 ### D2 — One placeholder renderer
 
-The iframe rewrite (`getMetaData`) and the hand-placed Pug embed mixin produce the same placeholder markup from one JS renderer (`src/placeholder.js`). A template test asserts both outputs are identical. Two copies of a public-contract markup would drift.
+The iframe rewrite (`getMetaData`) and the hand-placed Pug embed mixin produce the same placeholder markup. Two copies of a public-contract markup would drift, so the markup is defined once, in the JS renderer `src/placeholder.js#renderPlaceholder`, and a template test asserts the two outputs are byte-identical.
+
+**Amended 2026-10-16 (slice 4, with the user):** a Pug view cannot import a JS module — it sees only the locals core passes (`app`, `meta`, …) — so `views/embed.pug` mirrors the renderer in Pug (its own escape and `base_path` helpers) instead of calling it, and `test/templates.test.js` pins the mirror to `renderPlaceholder` on hostile inputs (`& < > " '`, attribute order, the attributes the renderer sets itself, `base_path`, a service without `privacy_url`, both languages). Rejected: a render function in `app.consent`, which would stop `app.consent` being plain data and make a function public contract. A change to the placeholder markup is made in both files; the test fails until they agree.
 
 ### D3 — The two-click placeholder loads that one embed, for this page view, and stores nothing
 
@@ -217,10 +219,10 @@ Resolution per key, first hit wins: `config/consent.yaml` `texts.<lang>.<key>` �
 | `cookies_heading` / `cookie_name` / `cookie_duration` / `cookie_purpose` | Cookies / Name / Duration / Purpose |
 | `notice_text` / `notice_dismiss` | This site uses only technically necessary cookies. / Got it |
 | `placeholder_text` | This content is provided by {service}. Loading it connects to {provider}. |
-| `placeholder_load` / `placeholder_settings` | Load content / Privacy settings |
+| `placeholder_load` / `placeholder_settings` | Load {service} / Privacy settings |
 | `privacy_link` | Privacy policy |
 
-`{service}` and `{provider}` in `placeholder_text` are filled in per embed. Category labels and descriptions are not text keys: `analytics`, `media`, `marketing` and `functional` have built-in de/en ones (`BUILTIN_CATEGORIES`), any other id shows its `label` or the id; a category's own `label` / `description` always wins. Adding a key is a minor; renaming or removing one is a major. An empty or whitespace-only override is warned about and ignored (the next source in the order applies), so no label — Reject all's included — can be blanked out.
+`{service}` and `{provider}` in `placeholder_text` and `placeholder_load` are filled in per embed. The load button names the service (de `{service} laden`), so two embeds on one page never share a label (amended in slice 4: it was `Load content`). Category labels and descriptions are not text keys: `analytics`, `media`, `marketing` and `functional` have built-in de/en ones (`BUILTIN_CATEGORIES`), any other id shows its `label` or the id; a category's own `label` / `description` always wins. Adding a key is a minor; renaming or removing one is a major. An empty or whitespace-only override is warned about and ignored (the next source in the order applies), so no label — Reject all's included — can be blanked out.
 
 ---
 
@@ -260,7 +262,7 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 
 - The iframe keeps all its other attributes, in source order, except `src`, which moves to `data-consent-src` (root-absolute → `base_path`, D8); it gets `data-consent` first and `hidden` last. Its raw content (fallback text) is kept.
 - Texts are resolved at build time from the page's language (`meta.lang || app.lang`, else `en`).
-- **Element list (fixed in slice 2):** the wrapper holds exactly the iframe and `__placeholder`; `__placeholder` holds, in order, `p.__text` (`placeholder_text` with `{service}` escaped and `{provider}` in `<strong>`), `button.__load` (`placeholder_load`), `a.__privacy` (`service_privacy`, the service's `privacy_url`; **left out** when the service has none) and `button.__settings` (`placeholder_settings`). All text and attribute values are HTML-escaped. One renderer, `src/placeholder.js#renderPlaceholder` (D2), emits it on one line, without whitespace between elements.
+- **Element list (fixed in slice 2):** the wrapper holds exactly the iframe and `__placeholder`; `__placeholder` holds, in order, `p.__text` (`placeholder_text` with `{service}` escaped and `{provider}` in `<strong>`), `button.__load` (`placeholder_load` with `{service}` and `{provider}` escaped, no markup), `a.__privacy` (`service_privacy`, the service's `privacy_url`; **left out** when the service has none) and `button.__settings` (`placeholder_settings`). All text and attribute values are HTML-escaped. `src/placeholder.js#renderPlaceholder` emits it on one line, without whitespace between elements, and `views/embed.pug` mirrors it byte for byte (D2).
 
 **Which iframes are gated.** An iframe is rewritten when the host of its `src` (entities decoded, resolved like a browser on an http **or** https page: protocol-relative `//host/…`, scheme-only `https:host/…`, backslashes, any case, a trailing dot dropped; `http(s)` only) equals a configured `hosts` entry or is a subdomain of one (`www.youtube.com` matches `youtube.com`; `notyoutube.com` and `youtube.com.evil.example` do not). With several matches the longest configured host wins (`maps.google.com` before `google.com`), ties go to the first configured. Root-absolute, relative and `data:`/`about:` sources stay on the site and are never gated. Iframes inside `<noscript>`, `<template>` and SVG `foreignObject` are found too. An iframe without a live `src` (already a placeholder) is left alone, so the rewrite is idempotent. The rewrite splices the page string at the parser's source offsets: everything that is not a matched iframe stays byte-identical, and a page without one is returned as the same object.
 
@@ -286,7 +288,16 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 
 ### BEM blocks
 
-`nera-consent` (banner; `nera-consent--notice` for the notice), `nera-consent-dialog`, `nera-consent-embed`. Their elements and modifiers are fixed with the views (slice 4) and written back here. `assets/consent.css` (slice 3) already styles these elements, which the views use or slice 4 renames in both places: `nera-consent__title`, `__text`, `__actions`, `__button` (all three first-layer buttons), `__link`; `nera-consent-dialog__title`, `__category`, `__label`, `__checkbox`, `__service`, `__table`, `__actions`, `__button`, `__link`; and the `nera-consent-embed__*` elements of the placeholder. All styling uses `--nera-consent-*` custom properties; the three first-layer buttons share one set (no per-button property, D6).
+`nera-consent` (banner; `nera-consent--notice` for the notice), `nera-consent-dialog`, `nera-consent-embed`. All styling uses `--nera-consent-*` custom properties; the three first-layer buttons share one set (no per-button property, D6).
+
+**Element list (fixed in slice 4, the published views):**
+
+- **`section.nera-consent`** (`views/banner.pug`, `data-consent-banner`, `aria-labelledby` → the title, rendered `hidden`): `h2.__title#nera-consent-title`, `p.__text` (`banner_text`, then `a.__link` → privacy page, left out without `privacy_url`), `div.__actions` with exactly three `button.__button` in fixed order — Accept all (`data-consent-accept-all`), Reject all (`data-consent-reject-all`), Settings (`data-consent-open`). No modifier on any of them (D6).
+- **`section.nera-consent.nera-consent--notice`** (`views/notice.pug`, `data-consent-notice`, `aria-labelledby` → its text, rendered `hidden`): `p.__text#nera-consent-notice-text` (`notice_text` + `a.__link`), `div.__actions` with one `button.__button` (`data-consent-dismiss`).
+- **`dialog.nera-consent-dialog`** (`views/settings.pug`, `data-consent-dialog`, `aria-labelledby` → its title): one `form.__form[method=dialog]` holding `button.__close[type=submit]` (× with `aria-label`/`title` = `close`), `h2.__title#nera-consent-dialog-title`, `p.__text` (+ `a.__link`), then one `div.__category` per category — first `necessary` (its checkbox `checked disabled`, no `data-consent-category`, `span.__status` "(Always active)"), then each configured one: `label.__label` wrapping `input.__checkbox[type=checkbox][data-consent-category]` (never `checked` in the markup) and the label text, `p.__description` when there is one, and per service `div.__service` with `h3.__service-name`, `dl.__details` (provider, purpose), `p > a.__link` (the service's privacy link, when set) and `table.__table` (caption `cookies_heading`, columns name/duration/purpose; only when the service lists cookies). Last `div.__actions` with three `button.__button`: Accept all, Reject all, Save selection (`data-consent-save`).
+- **`div.nera-consent-embed`**: the placeholder element list under "Gated iframes and the placeholder" (`views/embed.pug` renders it too, D2).
+
+`views/head.pug` emits no classes: only the gated `<script>` elements of "Gated scripts", inline code raw with `</script` and `<!--` escaped (`<\/script`, `<\!--`) so it cannot end the element.
 
 ---
 
@@ -340,6 +351,7 @@ Details fixed in slice 3 (`assets/consent.js`), which the views follow:
 - **`necessary`.** `has('necessary')` is always `true`, so a hand-written element gated as `data-consent="necessary"` activates without a choice. The plugin never emits one: `necessary` cannot be configured.
 - **No root, no consent.** On a page without a banner or notice root (mode `'none'`, or a layout that does not include the views), no choice can be read or given, `get()` is `null` and nothing gated activates. Without a dialog, a `data-consent-open` link keeps its own `href`.
 - **Linked twice.** A second copy of the runtime finds `window.neraConsent` and does nothing.
+- **Reserved space (slice 4, WCAG 2.4.11).** While the banner or notice shows, the runtime sets `data-consent-reserve` on `<html>` and `--nera-consent-banner-height` to the distance from the root's top edge to the viewport's bottom, kept current through a `ResizeObserver` (or `resize` without one). `consent.css` turns that into `padding-bottom` on `body` and `scroll-padding-bottom` on `html`, so the last content can be scrolled clear of the fixed banner and a focused element is scrolled above it. Once a choice hides the root, both go away. The first layer stays non-modal: the visitor can read the page before choosing.
 
 ---
 
@@ -382,7 +394,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 4 — Pug views, fixture site and accessibility
 
-- [ ] `views/{banner,settings,notice,head,embed}.pug` + `bin/publish-template.js`; fixture site passes `validateOutput` with no `a11y-*`; browser walkthrough. Write the BEM element list back here.
+- [x] `views/{banner,settings,notice,head,embed}.pug` + `bin/publish-template.js`; fixture site passes `validateOutput` with no `a11y-*`; browser walkthrough. Write the BEM element list back here.
+
+**Done 2026-10-16.** The element list is under "BEM blocks". The views are published with `npm run publish-template` or the `nera-consent-templates` bin (`publishTemplates` from plugin-utils) to `views/vendor/plugin-consent/`; the site includes `head` inside `<head>` and `banner`, `settings`, `notice` at the end of `<body>`, each rendering only in its own mode. Each view picks its locale as under "`app.consent`" and never uses `t()`: the plugin's texts already resolve `app.translations` at build time. The embed mixin is `+consent-embed({ category, service, src, attributes })`: the iframe attributes go in `attributes`, not as Pug attributes, because Pug escapes those before a mixin sees them (`&` would come out double-escaped); the mixin fails the build on Pug attributes and on a service the config does not have, rather than render a live iframe. D2 was amended (the mixin mirrors the renderer). `test/fixture/` is the fixture site (analytics with a gated external and inline script, media with YouTube, a hand-placed embed, en + de pages, and one map left ungated on purpose); `test/fixture.test.js` publishes the views into a temp copy through the real bin, builds it with core's `run()` and checks it with `validateOutput`: no `a11y-*`, `privacy-third-party` only for the map; a second build without categories covers notice mode. Browser walkthrough (Playwright, the fixture served statically at 320 px): no gated request before consent, Reject all holds after a reload, Settings / the footer `data-consent-open` link open the dialog modally with focus inside and nothing ticked, Escape and × store nothing and return focus, Save stores exactly the ticked categories, Accept all runs the inline script with its escaped `</script` intact, "Load YouTube" loads the one embed and stores nothing (D3), the notice's "Got it" stays dismissed after a reload, and a stored choice from another revision shows the banner again. `pug` is a devDependency for the template tests.
 
 ### Slice 5 — README and CHANGELOG for 1.0.0
 

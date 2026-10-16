@@ -117,7 +117,7 @@ describe('rewriteIframes', () => {
         const embed = doc('.nera-consent-embed')
         expect(embed.attr('data-consent')).toBe('media')
         expect(embed.is('[data-consent-embed]')).toBe(true)
-        expect(doc('[data-consent-load]').text()).toBe('Load content')
+        expect(doc('[data-consent-load]').text()).toBe('Load YouTube')
         expect(doc('[data-consent-open]').text()).toBe('Privacy settings')
         expect(doc('.nera-consent-embed__privacy').attr('href')).toBe('https://policies.google.com/privacy')
         expect(doc('.nera-consent-embed__text').html()).toBe(
@@ -190,7 +190,7 @@ describe('rewriteIframes', () => {
         const out = rewriteIframes('<iframe src="https://maps.google.com/x"></iframe>', context('de'))
         const doc = $(out)
         expect(doc('.nera-consent-embed').attr('data-consent')).toBe('media')
-        expect(doc('[data-consent-load]').text()).toBe('Inhalt laden')
+        expect(doc('[data-consent-load]').text()).toBe('Google Maps laden')
         expect(doc('.nera-consent-embed__text').text()).toContain('Google Ireland Limited, Dublin')
         // Google Maps has no privacy_url: no link.
         expect(doc('.nera-consent-embed__privacy')).toHaveLength(0)
@@ -268,10 +268,10 @@ describe('getMetaData', () => {
         expect(result[1]).not.toBe(en)
         expect(result[1].meta).toBe(en.meta)
         expect(en.content).toBe('<iframe src="https://youtube.com/x"></iframe>')
-        expect($(result[1].content)('[data-consent-load]').text()).toBe('Load content')
-        expect($(result[2].content)('[data-consent-load]').text()).toBe('Inhalt laden')
+        expect($(result[1].content)('[data-consent-load]').text()).toBe('Load YouTube')
+        expect($(result[2].content)('[data-consent-load]').text()).toBe('YouTube laden')
         // A language without a locale falls back to en.
-        expect($(result[3].content)('[data-consent-load]').text()).toBe('Load content')
+        expect($(result[3].content)('[data-consent-load]').text()).toBe('Load YouTube')
     })
 
     it('is deterministic', () => {

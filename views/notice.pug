@@ -1,0 +1,22 @@
+//- @nera-static/plugin-consent: the info notice (ROADMAP issue decision 5).
+//-
+//-     include /vendor/plugin-consent/notice
+//-
+//- Place it at the end of <body>. Renders only in 'notice' mode (no
+//- categories; nothing on the site needs consent). It is rendered `hidden`;
+//- the runtime shows it until the visitor dismisses it with "Got it".
+if app.consent && app.consent.mode === 'notice'
+    - const consentNotice = app.consent.locales[(meta && meta.lang) || app.lang] || app.consent.locales.en
+    section.nera-consent.nera-consent--notice(
+        data-consent-notice
+        data-consent-revision=app.consent.revision
+        aria-labelledby='nera-consent-notice-text'
+        hidden
+    )
+        p.nera-consent__text#nera-consent-notice-text
+            = consentNotice.texts.notice_text
+            if consentNotice.privacyUrl
+                = ' '
+                a.nera-consent__link(href=consentNotice.privacyUrl)= consentNotice.texts.privacy_link
+        .nera-consent__actions
+            button.nera-consent__button(type='button' data-consent-dismiss)= consentNotice.texts.notice_dismiss

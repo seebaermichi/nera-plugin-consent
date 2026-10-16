@@ -37,6 +37,12 @@ describe('built-in texts', () => {
         }
     })
 
+    it('the load button names the service, so two embeds never share a label', () => {
+        for (const lang of ['de', 'en']) {
+            expect(BUILTIN_TEXTS[lang].placeholder_load).toContain('{service}')
+        }
+    })
+
     it('de and en know the same built-in categories', () => {
         expect(Object.keys(BUILTIN_CATEGORIES.de)).toEqual(Object.keys(BUILTIN_CATEGORIES.en))
         expect(builtinCategory('media', 'de').label).toBe('Externe Medien')

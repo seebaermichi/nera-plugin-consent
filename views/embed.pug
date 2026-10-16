@@ -1,0 +1,66 @@
+//- @nera-static/plugin-consent: a hand-placed two-click embed (ROADMAP D2).
+//-
+//-     include /vendor/plugin-consent/embed
+//-     +consent-embed({
+//-         category: 'media',
+//-         service: 'YouTube',
+//-         src: 'https://www.youtube-nocookie.com/embed/abc',
+//-         attributes: { title: 'Our video', width: 560, height: 315, allowfullscreen: true },
+//-     })
+//-
+//- Renders the same placeholder the plugin writes for an iframe in a page's
+//- Markdown: the iframe without `src`, inert until the visitor loads it or
+//- grants the category. `category` and `service` name a service in
+//- config/consent.yaml (the build fails when there is none, rather than
+//- render a live iframe). `attributes` are the iframe's other attributes, in
+//- order: `true` or `''` renders a bare attribute, `false`/`null` none. Pass
+//- them in `attributes`, not as Pug attributes `+consent-embed(…)(title=…)`,
+//- which Pug escapes before the mixin sees them.
+//-
+//- This mirrors `src/placeholder.js#renderPlaceholder` byte for byte; the
+//- template test holds the two together. Keep every `data-consent*`
+//- attribute when you edit a published copy (D7).
+mixin consent-embed(embed)
+    -
+        if (Object.keys(attributes).length > 0) {
+            throw new Error('plugin-consent: +consent-embed takes the iframe attributes in its `attributes` option, not as Pug attributes — move them into `attributes: { … }`')
+        }
+        const consentEscape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[char])
+        const consentAttribute = (name, value) => value === '' ? ` ${name}` : ` ${name}="${consentEscape(value)}"`
+        const consentBasePath = typeof app.basePath === 'string' ? app.basePath : ''
+        const consentWithBasePath = (url) =>
+            !consentBasePath || typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') ||
+            url === consentBasePath || url.startsWith(`${consentBasePath}/`) ? url : `${consentBasePath}${url}`
+
+        const consentLocale = app.consent.locales[(meta && meta.lang) || app.lang] || app.consent.locales.en
+        const consentCategory = consentLocale.categories.find((category) => category.id === embed.category)
+        const consentService = consentCategory && consentCategory.services.find((service) => service.name === embed.service)
+        if (!consentService) {
+            throw new Error(`plugin-consent: +consent-embed names service "${embed.service}" in category "${embed.category}", which config/consent.yaml does not configure — add it there, or fix the mixin call`)
+        }
+        const consentTexts = consentLocale.texts
+
+        let consentIframe = '<iframe'
+        consentIframe += consentAttribute('data-consent', embed.category)
+        consentIframe += consentAttribute('data-consent-src', consentWithBasePath(embed.src))
+        for (const [name, value] of Object.entries(embed.attributes || {})) {
+            if (['src', 'data-consent', 'data-consent-src', 'hidden'].includes(name.toLowerCase())) continue
+            if (value === false || value === null || value === undefined) continue
+            consentIframe += consentAttribute(name, value === true ? '' : value)
+        }
+        consentIframe += ' hidden></iframe>'
+
+        const consentFillIn = (template, wrapProvider = (escaped) => escaped) => template
+            .split(/(\{service\}|\{provider\})/)
+            .map((part) => {
+                if (part === '{service}') return consentEscape(consentService.name)
+                if (part === '{provider}') return wrapProvider(consentEscape(consentService.provider))
+                return consentEscape(part)
+            })
+            .join('')
+        const consentText = consentFillIn(consentTexts.placeholder_text, (escaped) => `<strong>${escaped}</strong>`)
+        const consentLoad = consentFillIn(consentTexts.placeholder_load)
+        const consentPrivacy = consentService.privacyUrl
+            ? `<a class="nera-consent-embed__privacy" href="${consentEscape(consentService.privacyUrl)}" rel="noopener">${consentEscape(consentTexts.service_privacy)}</a>`
+            : ''
+    != `<div class="nera-consent-embed" data-consent-embed data-consent="${consentEscape(embed.category)}">` + consentIframe + '<div class="nera-consent-embed__placeholder">' + `<p class="nera-consent-embed__text">${consentText}</p>` + `<button class="nera-consent-embed__load" type="button" data-consent-load>${consentLoad}</button>` + consentPrivacy + `<button class="nera-consent-embed__settings" type="button" data-consent-open>${consentEscape(consentTexts.placeholder_settings)}</button>` + '</div></div>'
