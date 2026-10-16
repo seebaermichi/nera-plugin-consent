@@ -79,6 +79,8 @@ a(href='/privacy.html' data-consent-open) Privacy settings
 
 On a link, the `href` is the fallback: without the dialog on the page (or without JavaScript) the link simply goes to your privacy page. From your own scripts, call `window.neraConsent.open()`.
 
+The link also receives keyboard focus once a choice hides the banner, so a keyboard user lands next to the way back instead of at the top of the page: the runtime focuses the first visible `data-consent-open` element outside the banner, the dialog and embed placeholders.
+
 ## ⚙️ Configuration
 
 Every key is optional and falls back to a default, with a build warning when a value has the wrong type. Unknown keys are warned about and ignored.

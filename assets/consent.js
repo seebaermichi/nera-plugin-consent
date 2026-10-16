@@ -233,12 +233,34 @@
         else dialog.removeAttribute('open')
     }
 
+    const isVisible = (element) =>
+        !element.closest('[hidden]') &&
+        (typeof element.checkVisibility !== 'function' || element.checkVisibility())
+
+    /**
+     * After a choice hid the banner or notice, focus the site's own settings
+     * link — the first visible `[data-consent-open]` outside root, dialog and
+     * embed placeholders —
+     * so keyboard focus does not fall back to the top of the page. With none,
+     * focus is left alone.
+     */
+    function focusSettingsLink() {
+        const link = [...document.querySelectorAll('[data-consent-open]')].find((element) =>
+            !root?.contains(element) && !dialog?.contains(element) &&
+            !element.closest('[data-consent-embed]') && isVisible(element))
+        link?.focus()
+    }
+
     // Escape, the native Close button and every action land here.
     dialog?.addEventListener('close', () => {
         const target = opener
         opener = null
         if (!target?.isConnected || typeof target.focus !== 'function') return
         // The banner's Settings button is gone once a choice hid the banner.
+        if (root?.contains(target) && root.hidden) {
+            focusSettingsLink()
+            return
+        }
         if (target.closest('[hidden]')) return
         target.focus()
     })
@@ -250,12 +272,24 @@
 
     // ---- controls ----------------------------------------------------------
 
+    /**
+     * Store a choice and close the dialog. A choice made on the banner or
+     * notice itself hides the focused button with it, so focus moves on; a
+     * choice made in the dialog is handled by its `close` listener.
+     */
+    function choose(categories, control) {
+        const onRoot = root?.contains(control) ?? false
+        store(categories)
+        closeDialog()
+        if (onRoot) focusSettingsLink()
+    }
+
     const ACTIONS = [
         ['[data-consent-open]', () => open()],
-        ['[data-consent-accept-all]', () => { store(configured); closeDialog() }],
-        ['[data-consent-reject-all]', () => { store([]); closeDialog() }],
-        ['[data-consent-save]', () => { store(ticked()); closeDialog() }],
-        ['[data-consent-dismiss]', () => store([])],
+        ['[data-consent-accept-all]', (control) => choose(configured, control)],
+        ['[data-consent-reject-all]', (control) => choose([], control)],
+        ['[data-consent-save]', (control) => choose(ticked(), control)],
+        ['[data-consent-dismiss]', (control) => choose([], control)],
         ['[data-consent-load]', (control) => {
             // D3: this one embed, for this page view; nothing is stored.
             const wrapper = control.closest('[data-consent-embed]')

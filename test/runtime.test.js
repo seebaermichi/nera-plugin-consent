@@ -360,6 +360,81 @@ describe('settings dialog', () => {
     })
 })
 
+describe('focus after a choice (WCAG 2.4.3)', () => {
+    // The site's own settings links: one inside a `hidden` ancestor and one
+    // under `display: none` (both skipped), then the visible header and footer
+    // links. click() does not focus in happy-dom, so each test focuses the
+    // control first, as a keyboard user would have.
+    const LINKS =
+        '<nav hidden><a href="#" id="hidden-link" data-consent-open>Cookies</a></nav>' +
+        '<span style="display: none"><a href="#" id="none-link" data-consent-open>Cookies</a></span>' +
+        '<a href="#" id="header-link" data-consent-open>Cookies</a>' +
+        '<a href="#" id="footer-link" data-consent-open>Cookies</a>'
+    const FOCUS_PAGE = banner() + dialog + LINKS
+
+    const press = (window, id) => {
+        const control = window.document.getElementById(id)
+        control.focus()
+        control.click()
+    }
+    const focused = (window) => window.document.activeElement.id
+
+    it.each(['accept', 'reject'])('%s on the banner moves focus to the first visible settings link', (id) => {
+        const window = load(FOCUS_PAGE)
+        press(window, id)
+        expect(window.document.querySelector('[data-consent-banner]').hidden).toBe(true)
+        expect(focused(window)).toBe('header-link')
+    })
+
+    it.each(['save', 'dialog-accept', 'dialog-reject'])('%s in a dialog opened from the banner moves focus to the settings link', (id) => {
+        const window = load(FOCUS_PAGE)
+        press(window, 'settings')
+        press(window, id)
+        expect(window.document.querySelector('[data-consent-dialog]').open).toBe(false)
+        expect(focused(window)).toBe('header-link')
+    })
+
+    it.each(['save', 'dialog-accept', 'dialog-reject'])('%s in a dialog opened from the site\'s own link returns focus to that link', (id) => {
+        const window = load(FOCUS_PAGE)
+        press(window, 'footer-link')
+        press(window, id)
+        expect(window.document.querySelector('[data-consent-banner]').hidden).toBe(true)
+        expect(focused(window)).toBe('footer-link')
+    })
+
+    it('closing a dialog opened from the banner without a choice returns focus to Settings', () => {
+        const window = load(FOCUS_PAGE)
+        press(window, 'settings')
+        window.document.querySelector('[data-consent-dialog]').close()
+        expect(window.document.querySelector('[data-consent-banner]').hidden).toBe(false)
+        expect(focused(window)).toBe('settings')
+    })
+
+    it('skips an embed placeholder\'s settings button that comes before the site\'s link', () => {
+        const window = load(banner() + dialog + embed('https://www.youtube-nocookie.com/embed/abc') + LINKS)
+        press(window, 'reject')
+        expect(window.document.querySelector('.nera-consent-embed__settings').hidden).toBe(false)
+        expect(focused(window)).toBe('header-link')
+    })
+
+    it('Got it on the notice moves focus to the settings link', () => {
+        const window = load(notice() + LINKS)
+        press(window, 'dismiss')
+        expect(focused(window)).toBe('header-link')
+    })
+
+    it.each([
+        ['on the banner', ['accept']],
+        ['in the dialog', ['settings', 'save']],
+    ])('leaves focus alone without a visible settings link outside banner and dialog (%s)', (_, ids) => {
+        const window = load(banner() + dialog + LINKS.replace(/<a href="#" id="(header|footer)-link".*?<\/a>/g, ''))
+        for (const id of ids) press(window, id)
+        // happy-dom keeps focus on the last pressed button (a browser drops
+        // it to <body>); either way no settings link was focused.
+        expect(focused(window)).toBe(ids.at(-1))
+    })
+})
+
 describe('activation runs once', () => {
     it('never runs a script twice, however often consent is given', () => {
         const window = load(PAGE)
