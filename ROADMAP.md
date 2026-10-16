@@ -371,8 +371,10 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 0 — Spec and repository scaffold
 
-- [ ] This ROADMAP.
-- [ ] `package.json` (ESM, `engines` `^20.19.0 || >=22.0.0`, `files`, `publishConfig`, peer `@nera-static/core >=4.13.0`), lockfile from npm ≥ 10.9, `index.js` stub with a test, eslint, husky, `.github/` (test, publish, dependabot, funding), `LICENSE`, `CHANGELOG.md`, README stub — matching `nera-plugin-code-blocks`.
+- [x] This ROADMAP.
+- [x] `package.json` (ESM, `engines` `^20.19.0 || >=22.0.0`, `files`, `publishConfig`, peer `@nera-static/core >=4.13.0`), lockfile from npm ≥ 10.9, `index.js` stub with a test, eslint, husky, `.github/` (test, publish, dependabot, funding), `LICENSE`, `CHANGELOG.md`, README stub — matching `nera-plugin-code-blocks`.
+
+**Done 2026-10-16.** The README stub links this file until slice 5 replaces it.
 
 ### Slice 1 — Config, texts and `app.consent` (`getAppData`)
 
@@ -400,7 +402,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 5 — README and CHANGELOG for 1.0.0
 
-- [ ] README (badges, config reference, markup contract matching this file, layout snippet, settings link snippet, theming table, multilingual texts, "defaults, not legal advice", https://nera.js.org); `## [1.0.0]`; tarball holds only what ships.
+- [x] README (badges, config reference, markup contract matching this file, layout snippet, settings link snippet, theming table, multilingual texts, "defaults, not legal advice", https://nera.js.org); `## [1.0.0]`; tarball holds only what ships.
+
+**Done 2026-10-16.** The README documents usage and links here for the spec. Where it repeats the spec — the gated script examples and rules, the placeholder markup, the runtime hooks table, the `window.neraConsent` table and the storage format — it copies this file verbatim, and `test/readme.test.js` fails when the two differ; it also holds the README's theming table to every `--nera-consent-*` property and default in `assets/consent.css`, and checks README, this file, the CHANGELOG, the shipped config and the texts for a compliance claim. Version 1.0.0 (`npm version 1.0.0 --no-git-tag-version`); the tarball holds `index.js`, `src`, `assets`, `views`, `bin`, `config`, README, CHANGELOG, LICENSE and `package.json`.
 
 ### Slice 6 — Release (maintainer)
 
@@ -414,8 +418,8 @@ Public contract: config keys and defaults, `app.consent`, the markup contract (a
 
 ## Acceptance criteria (1.0.0)
 
-- [ ] This ROADMAP with decisions, slices and open questions.
-- [ ] Tests: config → banner / `app.consent`; iframe rewrite (match / no match / rest byte-identical); gated script include (head view); no categories → info notice; revision bump asks again; a stored notice choice does not count on a banner page.
-- [ ] Fixture site builds clean with `nera build --check` (no `a11y-*`; `privacy-third-party` only where deliberately ungated).
-- [ ] Manual browser test: nothing gated before consent, Reject all works, the settings link reopens the dialog.
+- [x] This ROADMAP with decisions, slices and open questions.
+- [x] Tests: config → banner / `app.consent`; iframe rewrite (match / no match / rest byte-identical); gated script include (head view); no categories → info notice; revision bump asks again; a stored notice choice does not count on a banner page.
+- [x] Fixture site builds clean with `nera build --check` (no `a11y-*`; `privacy-third-party` only where deliberately ungated).
+- [x] Manual browser test: nothing gated before consent, Reject all works, the settings link reopens the dialog (slice 4's walkthrough, 2026-10-16).
 - [ ] Released per the brand-new-package rule, listed in the catalogs, repo secured.
