@@ -7,8 +7,10 @@ import { withBasePath } from './app-consent.js'
 // The iframe is inert as rendered: no `src`, only `data-consent-src`.
 
 // Attributes the renderer sets itself; a copy from the source iframe would
-// duplicate or contradict them.
-const OWN_ATTRIBUTES = new Set(['src', 'data-consent', 'data-consent-src', 'hidden'])
+// duplicate or contradict them. `srcdoc` goes too: it renders while the
+// iframe is `hidden` (no consent needed for inline markup that may itself
+// load third-party content) and would win over the `src` set on activation.
+const OWN_ATTRIBUTES = new Set(['src', 'srcdoc', 'data-consent', 'data-consent-src', 'hidden'])
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }
 
@@ -46,8 +48,8 @@ function fillIn(template, { service, provider }, wrapProvider = (escaped) => esc
  *     the service as in `app.consent.locales[lang].categories[].services[]`
  * @param {Record<string, string>} embed.texts the page language's texts
  * @param {Record<string, string>} [embed.attributes] the source iframe's other
- *     attributes, in order (`src`, `data-consent`, `data-consent-src` and
- *     `hidden` are ignored)
+ *     attributes, in order (`src`, `srcdoc`, `data-consent`,
+ *     `data-consent-src` and `hidden` are ignored)
  * @param {string} [embed.inner] the source iframe's raw content, kept as is
  * @param {string} [embed.basePath]
  * @returns {string}

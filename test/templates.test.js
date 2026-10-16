@@ -265,7 +265,7 @@ describe('embed.pug (D2)', () => {
                 category: 'media',
                 service: 'YouTube',
                 src: 'https://www.youtube.com/embed/a?x=1&y=2',
-                attributes: { width: '560', title: 'Tom\'s <"video"> & more', allowfullscreen: '', SRC: '/x', hidden: '' },
+                attributes: { width: '560', title: 'Tom\'s <"video"> & more', allowfullscreen: '', SRC: '/x', srcdoc: '<p>x</p>', hidden: '' },
             },
         ],
         ['a service without privacy_url and with markup in its names', { category: 'media', service: 'Vimeo\'s <player>', src: 'https://vimeo.com/1' }],
@@ -287,6 +287,12 @@ describe('embed.pug (D2)', () => {
             '<button class="nera-consent-embed__load" type="button" data-consent-load>' +
             'Load Vimeo&#39;s &lt;player&gt; &lt;now&gt; — connects to Vimeo &amp; Co</button>'
         )
+    })
+
+    it('drops srcdoc, like the rewrite', () => {
+        const embed = { category: 'media', service: 'YouTube', src: 'https://youtube.com/e', attributes: { srcdoc: '<p>x</p>', title: 't' } }
+        expect(mixin(embed)).not.toMatch(/srcdoc/i)
+        expect(mixin(embed)).toBe(expected(embed))
     })
 
     it('renders true as a bare attribute and drops false and null', () => {

@@ -149,6 +149,8 @@ Paste the embed code into your Markdown as usual:
 
 When the host of its `src` equals a configured `hosts` entry or is a subdomain of it (`www.youtube.com` matches `youtube.com`; `notyoutube.com` does not), the build replaces it with the two-click placeholder below. Everything else in the page stays byte for byte as it was. Iframes from your own site (root-absolute or relative `src`) are never gated.
 
+A gated iframe loses a `srcdoc` attribute, which would otherwise render before consent. An iframe the build cannot reach, such as one inside a `<select>`, keeps its live `src`; the build warns with the page and the host, so move it out or use the mixin below.
+
 To place an embed in a Pug view instead, use the mixin from the published `embed` view. It renders exactly the same placeholder:
 
 ```pug

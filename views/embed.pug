@@ -44,7 +44,7 @@ mixin consent-embed(embed)
         consentIframe += consentAttribute('data-consent', embed.category)
         consentIframe += consentAttribute('data-consent-src', consentWithBasePath(embed.src))
         for (const [name, value] of Object.entries(embed.attributes || {})) {
-            if (['src', 'data-consent', 'data-consent-src', 'hidden'].includes(name.toLowerCase())) continue
+            if (['src', 'srcdoc', 'data-consent', 'data-consent-src', 'hidden'].includes(name.toLowerCase())) continue
             if (value === false || value === null || value === undefined) continue
             consentIframe += consentAttribute(name, value === true ? '' : value)
         }

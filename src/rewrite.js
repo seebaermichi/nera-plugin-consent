@@ -12,7 +12,11 @@ import { renderPlaceholder } from './placeholder.js'
 // errs towards gating: any subdomain matches, the host is compared the way a
 // browser resolves it (case, trailing dot, protocol-relative URLs), and
 // iframes inside `<noscript>` and `<template>` are found too (parsed with
-// scripting off, where `<noscript>` content is markup, not text).
+// scripting off, where `<noscript>` content is markup, not text). Where the
+// parser still diverges from a browser (`<select><iframe …>`: parse5 drops
+// the tag, a browser with customizable `<select>` keeps it), the raw-text
+// scan `findLiveGatedIframes` catches what the rewrite missed, and
+// `getMetaData` warns.
 
 const PARSE_OPTIONS = { sourceCodeLocationInfo: true, scriptingEnabled: false }
 const DUMMY_HOST = 'nera-consent.invalid'
@@ -77,18 +81,20 @@ function findService(locale, { category, service }) {
 }
 
 /**
- * Rewrite the gated iframes of one page.
+ * Rewrite the gated iframes of one page. A gated `src` is third-party by
+ * definition, so it never gets `base_path`: a value like `/\host/x` reaches
+ * `host` in a browser, and a prefix would break it (D8 serves hand-written
+ * root-absolute sources in the Pug mixin only).
  *
  * @param {string} content rendered page HTML
  * @param {object} context
  * @param {{ category: string, service: string, host: string }[]} context.hosts
  *     `app.consent.hosts`
  * @param {object} context.locale `app.consent.locales[<page lang>]`
- * @param {string} [context.basePath]
  * @returns {string} the rewritten HTML, or `content` itself when no iframe
  *     matched
  */
-export function rewriteIframes(content, { hosts, locale, basePath = '' }) {
+export function rewriteIframes(content, { hosts, locale }) {
     if (!hasIframe(content) || hosts.length === 0) return content
 
     const $ = load(content, PARSE_OPTIONS, false)
@@ -116,7 +122,6 @@ export function rewriteIframes(content, { hosts, locale, basePath = '' }) {
                 texts: locale.texts,
                 attributes: element.attribs,
                 inner: content.slice(innerStart, innerEnd),
-                basePath,
             }),
         })
     })
@@ -129,4 +134,33 @@ export function rewriteIframes(content, { hosts, locale, basePath = '' }) {
         result = result.slice(0, start) + html + result.slice(end)
     }
     return result
+}
+
+// An `<iframe` start tag in raw text: quoted values may hold `>`. A quote
+// opens a value only right after `=`, as in a browser; elsewhere (`title=a"b`)
+// it is a literal and must not swallow the tags that follow.
+const IFRAME_START_TAG = /<iframe(?=[\s/>])(?:=\s*(?:"[^"]*"|'[^']*')|[^>])*>?/gi
+
+/**
+ * The gated hosts of every `<iframe` start tag in `content`'s raw text that
+ * still carries a live `src` — what a browser would load before consent. Run
+ * on the rewritten page, so the rewrite's own placeholders (no `src`) never
+ * count. Each tag is parsed on its own, so attributes read as a browser reads
+ * them (entities decoded, the first of a duplicate wins). A raw scan also
+ * sees tags in comments, scripts and an iframe's fallback text: it only feeds
+ * a warning, never a rewrite.
+ *
+ * @param {string} content rendered (and rewritten) page HTML
+ * @param {{ category: string, service: string, host: string }[]} hosts
+ * @returns {string[]} the matched hosts, in source order
+ */
+export function findLiveGatedIframes(content, hosts) {
+    if (!hasIframe(content) || hosts.length === 0) return []
+    const found = []
+    for (const [tag] of content.matchAll(IFRAME_START_TAG)) {
+        const iframe = load(tag, PARSE_OPTIONS, false)('iframe').get(0)
+        const host = iframe && srcHost(iframe.attribs.src)
+        if (matchHost(host, hosts)) found.push(host)
+    }
+    return found
 }

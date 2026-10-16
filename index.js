@@ -7,7 +7,8 @@ import { fileURLToPath } from 'url'
 import { buildAppConsent } from './src/app-consent.js'
 import { loadConfig } from './src/config.js'
 import { assertCoreVersion, coreVersion } from './src/guard.js'
-import { rewriteIframes } from './src/rewrite.js'
+import { findLiveGatedIframes, rewriteIframes } from './src/rewrite.js'
+import { warn } from './src/warn.js'
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets')
 
@@ -28,10 +29,14 @@ export function getAppData({ app, pagesData }) {
     return { ...app, consent: buildAppConsent(config, { app, pagesData }) }
 }
 
+// How a warning names a page: core's `meta.href`, its output path.
+const pageName = (page) => page.meta?.href || 'a page'
+
 /**
  * Replaces every iframe whose host a service gates with the two-click
- * placeholder (D2), in the page's language. Pages without such an iframe are
- * returned as the same object. Fails the build on a core too old to call
+ * placeholder (D2), in the page's language, and warns about any gated iframe
+ * the rewrite could not reach. Pages without such an iframe are returned as
+ * the same object. Fails the build on a core too old to call
  * `getAssets`, unless the site has no consent UI at all (mode 'none').
  *
  * @param {{ app: object, pagesData: object[] }} data
@@ -43,11 +48,13 @@ export function getMetaData({ app, pagesData }) {
     const consent = app.consent || buildAppConsent(loadConfig({ app }), { app, pagesData })
     if (consent.mode !== 'none') assertCoreVersion(coreVersion())
 
-    const basePath = typeof app.basePath === 'string' ? app.basePath : ''
     return pagesData.map((page) => {
         const lang = page.meta?.lang || app.lang
         const locale = consent.locales[lang] || consent.locales.en
-        const content = rewriteIframes(page.content, { hosts: consent.hosts, locale, basePath })
+        const content = rewriteIframes(page.content, { hosts: consent.hosts, locale })
+        for (const host of findLiveGatedIframes(content, consent.hosts)) {
+            warn(`${pageName(page)}: an <iframe> from ${host} escaped the rewrite and may load before consent (inside <select>, or other markup the HTML parser reads differently) — move it out, or place it with the +consent-embed mixin`)
+        }
         return content === page.content ? page : { ...page, content }
     })
 }
