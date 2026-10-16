@@ -1,16 +1,20 @@
-// @nera-static/plugin-consent — ROADMAP.md is the spec. Slice 0 only
-// scaffolds the package: the three hooks exist with the shapes core expects
-// (getAppData → plain object, getMetaData → array, getAssets → [{ from, to }])
-// and change nothing yet. Slices 1–2 fill them in.
+// @nera-static/plugin-consent — ROADMAP.md is the spec. The three hooks keep
+// the shapes core expects (getAppData → plain object, getMetaData → array,
+// getAssets → [{ from, to }]) and stay synchronous.
+
+import { buildAppConsent } from './src/app-consent.js'
+import { loadConfig } from './src/config.js'
 
 /**
- * Adds `app.consent` (slice 1). For now returns `app` unchanged.
+ * Adds `app.consent` from the site's `config/consent.yaml`, keeping every
+ * other `app` key.
  *
- * @param {{ app: object }} data
+ * @param {{ app: object, pagesData?: object[] }} data
  * @returns {object}
  */
-export function getAppData({ app }) {
-    return { ...app }
+export function getAppData({ app, pagesData }) {
+    const config = loadConfig({ app })
+    return { ...app, consent: buildAppConsent(config, { app, pagesData }) }
 }
 
 /**

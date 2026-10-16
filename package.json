@@ -6,14 +6,18 @@
     "scripts": {
         "lint": "eslint .",
         "test": "vitest",
-        "prepare": "husky"
+        "prepare": "husky",
+        "publish-config": "node ./bin/publish-config.js"
     },
     "type": "module",
     "exports": {
         ".": "./index.js"
     },
     "files": [
+        "bin",
+        "config",
         "index.js",
+        "src",
         "CHANGELOG.md"
     ],
     "keywords": [
@@ -57,5 +61,8 @@
         "happy-dom": "^21.0.3",
         "husky": "^9.1.7",
         "vitest": "^5.0.5"
+    },
+    "bin": {
+        "nera-consent": "bin/publish-config.js"
     }
 }

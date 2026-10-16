@@ -123,6 +123,11 @@ privacy_url:
     de: /datenschutz.html
     en: /en/privacy.html
 
+# Show the info notice when there are no categories (boolean). Default: true.
+# false → no consent UI at all (mode 'none'). Ignored, with a warning, as soon
+# as a category exists: it can never hide the banner (O4).
+notice: true
+
 # Optional categories, in display order. None → notice mode.
 categories:
     - id: analytics                 # [a-z][a-z0-9-]*; `necessary` is reserved
@@ -152,6 +157,8 @@ texts:
         banner_title: Cookies et contenus externes
 ```
 
+**Validation.** A category needs a valid, unique id and at least one valid service, else it is dropped with a warning. A service needs `name`, `provider` and `purpose`, else it is dropped. A cookie needs a `name`. A host must be a bare host name (no scheme, path or port), lower-cased on reading. A script needs exactly one of `src` / `inline`; a non-boolean `async` / `defer` / `module` warns and reads as `false`. Unknown keys warn at every level.
+
 **Localisable** values are a string or a map `{ <lang>: string }`; a map resolves `meta.lang || app.lang`, then `en`, then its first value.
 
 **Host matching.** `hosts` lists bare host names. Comparison is case-insensitive on the parsed URL host (port ignored). A host matches an iframe `src` whose host equals it or ends in `.<host>` (`youtube.com` matches `www.youtube.com`, not `notyoutube.com`). Protocol-relative `src` (`//www.youtube.com/…`) is matched like `https:`. Root-absolute and relative `src` values never match (same origin).
@@ -166,7 +173,7 @@ texts:
 
 ```js
 app.consent = {
-    mode: 'banner',               // 'banner' with ≥ 1 category, else 'notice'
+    mode: 'banner',               // 'banner' with ≥ 1 category, else 'notice' ('none' with `notice: false`)
     revision: 1,
     storageKey: 'nera-consent',
     languages: ['de', 'en'],      // app.lang, every meta.lang, every `texts` language, always `en`
@@ -196,7 +203,24 @@ A view picks its locale with `app.consent.locales[meta.lang || app.lang] || app.
 
 ## Texts
 
-Resolution per key, first hit wins: `config/consent.yaml` `texts.<lang>.<key>` → `app.translations[<lang>]['consent.<key>']` → built-in `<lang>` → built-in `en`. Built in: `de`, `en`. The key list (banner title and text, the three button labels, dialog title/text, Save selection, Close, the "necessary" label and description, notice text and "Got it", placeholder text and "Load" label, privacy link label, cookie table headings) is fixed in slice 1 and written back here. An empty or whitespace-only override is warned about and ignored (the next source in the order applies), so no label — Reject all's included — can be blanked out.
+Resolution per key, first hit wins: `config/consent.yaml` `texts.<lang>.<key>` → `app.translations[<lang>]['consent.<key>']` → built-in `<lang>` → built-in `en`. Built in: `de`, `en`. The key list (fixed in slice 1, `TEXT_KEYS` in `src/texts.js`):
+
+| key | en default |
+|---|---|
+| `banner_title` | Cookies and external content |
+| `banner_text` | This site can load content and services from third parties. … |
+| `accept_all` / `reject_all` / `settings` | Accept all / Reject all / Settings |
+| `dialog_title` / `dialog_text` | Privacy settings / Choose which categories you agree to. … |
+| `save` / `close` | Save selection / Close |
+| `necessary_label` / `necessary_description` / `always_active` | Strictly necessary / Required for the site to work, … / Always active |
+| `service_provider` / `service_purpose` / `service_privacy` | Provider / Purpose / Privacy policy of the provider |
+| `cookies_heading` / `cookie_name` / `cookie_duration` / `cookie_purpose` | Cookies / Name / Duration / Purpose |
+| `notice_text` / `notice_dismiss` | This site uses only technically necessary cookies. / Got it |
+| `placeholder_text` | This content is provided by {service}. Loading it connects to {provider}. |
+| `placeholder_load` / `placeholder_settings` | Load content / Privacy settings |
+| `privacy_link` | Privacy policy |
+
+`{service}` and `{provider}` in `placeholder_text` are filled in per embed. Category labels and descriptions are not text keys: `analytics`, `media`, `marketing` and `functional` have built-in de/en ones (`BUILTIN_CATEGORIES`), any other id shows its `label` or the id; a category's own `label` / `description` always wins. Adding a key is a minor; renaming or removing one is a major. An empty or whitespace-only override is warned about and ignored (the next source in the order applies), so no label — Reject all's included — can be blanked out.
 
 ---
 
@@ -313,7 +337,7 @@ On load: read the choice. None (another revision, or a `"notice"` choice on a ba
 - **O1 — Two-click scope (D3).** Should "Load video" also offer "always load <provider>", granting the category? Today it loads the one embed only.
 - **O2 — Google Consent Mode v2.** Not in 1.0 (issue decision 7). A follow-up could emit `gtag('consent', 'default', …)` / `'update'` mapped from categories.
 - **O3 — Digital Omnibus.** The browser-signal article was dropped in June 2026. Re-check before each minor release whether a browser-level signal must be honoured.
-- **O4 — Can the info notice be switched off?** The goal names "no banner at all" for the honest case; issue decision 5 names an info notice. Decide in slice 1 whether a `notice: false` key exists (not legal floor: the notice is informational).
+- ~~**O4 — Can the info notice be switched off?**~~ **Decided 2026-10-16: yes**, `notice: false` (default `true`) → `app.consent.mode: 'none'`, the views render nothing. Ignored with a warning once a category exists, so it can never hide the banner. Not legal floor: the notice is informational.
 - **O5 — Reload on withdrawal?** Should saving a narrower choice reload the page so withdrawn scripts stop at once, instead of from the next navigation?
 
 ---
@@ -329,7 +353,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 1 — Config, texts and `app.consent` (`getAppData`)
 
-- [ ] `src/config.js`, `src/texts.js`; fallbacks, warnings, notice mode on a missing file; `necessary` never configurable; no pre-selection key; `base_path`; de/en/fallback texts; the documented `config/consent.yaml` + `bin/publish-config.js`. Decide O4; write the text key list back here.
+- [x] `src/config.js`, `src/texts.js`; fallbacks, warnings, notice mode on a missing file; `necessary` never configurable; no pre-selection key; `base_path`; de/en/fallback texts; the documented `config/consent.yaml` + `bin/publish-config.js`. Decide O4; write the text key list back here.
+
+**Done 2026-10-16.** `app.consent` is built in `src/app-consent.js` (`buildAppConsent`, `withBasePath`); `index.js#getAppData` only loads the config and adds the key. O4 decided (`notice: false` → mode `'none'`). The text key list and the validation rules are under "Texts" and "Configuration". A missing `privacy_url` warns in `banner` and `notice` mode, not in `none`. The shipped `config/consent.yaml` keeps only `revision` and `notice` live (everything else commented), so publishing it (`npx nera-consent`) never puts an example service on a site.
 
 ### Slice 2 — Iframe rewrite, assets and core guard (`getMetaData`, `getAssets`)
 

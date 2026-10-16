@@ -1,0 +1,62 @@
+# @nera-static/plugin-consent — every key is optional.
+# Copy this file to your site's config/ folder (npx nera-consent) and edit it
+# there. The texts the plugin ships are defaults, not legal advice.
+#
+# Without categories the site shows only a short info notice ("only technically
+# necessary cookies"). "necessary" is implicit and always on: it cannot be
+# listed, and no category can be pre-selected.
+
+# Bump to ask every visitor again (integer ≥ 1). Bump it whenever you add a
+# service or category to a site that already shows the banner.
+revision: 1
+
+# Your privacy policy: root-absolute (base_path is applied) or absolute, one
+# URL for all languages or one per language.
+# privacy_url: /privacy.html
+# privacy_url:
+#     de: /datenschutz.html
+#     en: /en/privacy.html
+
+# Show the info notice when there are no categories. Set to false for no
+# consent UI at all; ignored as soon as a category exists.
+notice: true
+
+# Categories, in display order. Built-in labels exist for analytics, media,
+# marketing and functional; any other id needs a label (else the id shows).
+# label, description, purpose, privacy_url and a cookie's duration/purpose take
+# one text or one text per language ({ de: …, en: … }).
+# categories:
+#     - id: media
+#       services:
+#           - name: YouTube
+#             provider: Google Ireland Limited, Dublin
+#             purpose: Shows embedded videos.
+#             privacy_url: https://policies.google.com/privacy
+#             # iframes on these hosts become a two-click placeholder
+#             hosts: [youtube.com, youtube-nocookie.com]
+#     - id: analytics
+#       services:
+#           - name: Matomo
+#             provider: Example GmbH, Berlin
+#             purpose: Counts visits without profiles.
+#             cookies:
+#                 - name: _pk_id
+#                   duration: 13 months
+#                   purpose: Recognises returning visitors.
+#             # emitted inert by the head view, run only after consent
+#             scripts:
+#                 - src: https://matomo.example.com/matomo.js
+#                   async: true
+#                 - inline: |
+#                       var _paq = window._paq = window._paq || [];
+
+# Text overrides per language; English and German are built in. Keys:
+# banner_title, banner_text, accept_all, reject_all, settings, dialog_title,
+# dialog_text, save, close, necessary_label, necessary_description,
+# always_active, service_provider, service_purpose, service_privacy,
+# cookies_heading, cookie_name, cookie_duration, cookie_purpose, notice_text,
+# notice_dismiss, placeholder_text ({service}, {provider}), placeholder_load,
+# placeholder_settings, privacy_link. Empty texts are ignored.
+# texts:
+#     fr:
+#         banner_title: Cookies et contenus externes
