@@ -286,7 +286,7 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 
 ### BEM blocks
 
-`nera-consent` (banner; `nera-consent--notice` for the notice), `nera-consent-dialog`, `nera-consent-embed`. Their elements and modifiers are fixed with the views (slice 4) and written back here. All styling uses `--nera-consent-*` custom properties; the three first-layer buttons share one set (no per-button property, D6).
+`nera-consent` (banner; `nera-consent--notice` for the notice), `nera-consent-dialog`, `nera-consent-embed`. Their elements and modifiers are fixed with the views (slice 4) and written back here. `assets/consent.css` (slice 3) already styles these elements, which the views use or slice 4 renames in both places: `nera-consent__title`, `__text`, `__actions`, `__button` (all three first-layer buttons), `__link`; `nera-consent-dialog__title`, `__category`, `__label`, `__checkbox`, `__service`, `__table`, `__actions`, `__button`, `__link`; and the `nera-consent-embed__*` elements of the placeholder. All styling uses `--nera-consent-*` custom properties; the three first-layer buttons share one set (no per-button property, D6).
 
 ---
 
@@ -332,6 +332,15 @@ script(src='/_nera/consent.js' defer)
 
 On load: read the choice. None (another revision, or a `"notice"` choice on a banner page) → show the banner (or, in notice mode, the notice); nothing gated activates. A valid choice → activate every gated script and iframe whose category is granted, scripts in document order, each once (`data-consent-state`), keeping `async` / `defer` / module semantics. Saving a choice that grants more activates the newly granted elements at once; a choice that grants less (withdrawal) is stored at once and takes effect from the next page load, since a script that already ran cannot be unloaded (O5). Closing the dialog with Escape or Close changes no stored choice — Close is native (`<form method="dialog">`), so it needs no `data-consent-*` hook; the runtime listens to the dialog's `close` event to return focus; with none stored, the banner stays.
 
+Details fixed in slice 3 (`assets/consent.js`), which the views follow:
+
+- **Visibility.** The banner and notice roots are rendered with `hidden`; the runtime shows the one root when there is no valid choice and hides it once a choice is stored. Without JavaScript nothing is shown, and nothing gated could run anyway. The banner wins when a page carries both roots.
+- **Script order.** Gated scripts are replaced in place by live copies, in document order. An external script without `async` holds the queue until its `load` or `error`, as a parser-inserted one would (`defer` counts as ordered, since the runtime itself runs deferred); inline and `async` scripts never wait. An element is claimed (`data-consent-state="active"`) before it is queued, so a later pass cannot queue it twice. Inline module scripts are not waited for, as a browser would not either.
+- **Embeds.** Activating an iframe sets `src` from `data-consent-src`, drops its `hidden`, marks the wrapper `data-consent-state="active"` and hides every other child of the wrapper (the placeholder) through `hidden`, without relying on a class (D7).
+- **`necessary`.** `has('necessary')` is always `true`, so a hand-written element gated as `data-consent="necessary"` activates without a choice. The plugin never emits one: `necessary` cannot be configured.
+- **No root, no consent.** On a page without a banner or notice root (mode `'none'`, or a layout that does not include the views), no choice can be read or given, `get()` is `null` and nothing gated activates. Without a dialog, a `data-consent-open` link keeps its own `href`.
+- **Linked twice.** A second copy of the runtime finds `window.neraConsent` and does nothing.
+
 ---
 
 ## Open questions (decide with the user)
@@ -367,7 +376,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 3 — Runtime: `consent.js` and `consent.css`
 
-- [ ] Storage, banner logic, activation in order and once, D3 single embed, `data-consent-open` / `neraConsent`, change event; `--nera-consent-*` with ≥ 4.5:1 default contrast; happy-dom tests. State the file sizes here.
+- [x] Storage, banner logic, activation in order and once, D3 single embed, `data-consent-open` / `neraConsent`, change event; `--nera-consent-*` with ≥ 4.5:1 default contrast; happy-dom tests. State the file sizes here.
+
+**Done 2026-10-16.** Sizes, unminified: `consent.js` 9,655 bytes (3,070 gzipped), `consent.css` 5,565 bytes (1,501 gzipped). The runtime details the views follow are under "Runtime behaviour". Every colour is a `var(--nera-consent-<name>, <default>)` fallback rather than a `:root` declaration, so a site's own values win whatever the stylesheet order; `test/assets.test.js` checks one fallback per property and the contrast of each default pair (text ≥ 4.5:1, focus ring and borders ≥ 3:1). `test/runtime.test.js` runs the runtime in happy-dom with script file loading off (no network): inline gated scripts really execute, external ones count as run at their `load` event, which the order tests hold back to stand in for a slow network. happy-dom shares element prototypes between windows, so such a patch is undone after each test.
 
 ### Slice 4 — Pug views, fixture site and accessibility
 
