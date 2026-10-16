@@ -34,3 +34,4 @@ build/
 # Test scratch directory
 .tmp/
 plans/
+.claude/.work-issue-active
