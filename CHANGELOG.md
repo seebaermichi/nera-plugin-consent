@@ -14,3 +14,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   `config/consent.yaml`: `revision`, `privacy_url`, `notice`, `categories` with `services` (`name`, `provider`, `purpose`, `privacy_url`, `cookies`, `hosts`, `scripts`) and `texts`; every key falls back with a warning, unknown keys are ignored, `necessary` and pre-selection cannot be configured. Publish the documented default with `npx nera-consent`.
 -   `getAppData` writes `app.consent` (`mode`, `revision`, `storageKey`, `languages`, per-language `locales` with texts, categories and privacy URL, `scripts`, `hosts`); root-absolute URLs get `base_path`.
 -   Built-in German and English texts, overridable per language through `texts` or `app.translations` (`consent.<key>`).
+-   `getMetaData` replaces every iframe whose `src` host (or a subdomain of it) is in a service's `hosts` with a two-click placeholder: the iframe keeps its attributes, its URL moves to `data-consent-src`, and nothing else in the page changes.
+-   `getAssets` ships the runtime to `public/_nera/consent.js` and `public/_nera/consent.css`; the build fails on `@nera-static/core` older than 4.13.0.

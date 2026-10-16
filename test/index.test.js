@@ -1,3 +1,4 @@
+import fs from 'fs'
 import { describe, it, expect, vi } from 'vitest'
 import * as plugin from '../index.js'
 
@@ -19,8 +20,12 @@ describe('plugin exports', () => {
         expect(appResult).toMatchObject(app)
         expect(appResult).not.toBe(app)
         expect(appResult.consent.mode).toBe('notice')
-        expect(plugin.getMetaData({ app, pagesData })).toBe(pagesData)
-        expect(plugin.getAssets({ app, pagesData })).toEqual([])
+        const metaResult = plugin.getMetaData({ app: appResult, pagesData })
+        expect(Array.isArray(metaResult)).toBe(true)
+        expect(metaResult[0]).toBe(pagesData[0])
+        const assets = plugin.getAssets({ app: appResult, pagesData })
+        expect(assets.map(({ to }) => to)).toEqual(['_nera/consent.js', '_nera/consent.css'])
+        for (const { from } of assets) expect(fs.existsSync(from)).toBe(true)
         vi.restoreAllMocks()
     })
 })

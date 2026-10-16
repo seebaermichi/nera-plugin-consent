@@ -14,6 +14,7 @@
         ".": "./index.js"
     },
     "files": [
+        "assets",
         "bin",
         "config",
         "index.js",

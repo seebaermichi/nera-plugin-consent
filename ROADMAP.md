@@ -258,9 +258,11 @@ The head include (`views/vendor/plugin-consent/head.pug`) emits `app.consent.scr
 </div>
 ```
 
-- The iframe keeps all its attributes except `src`, which moves to `data-consent-src` (root-absolute → `base_path`, D8); it gets `data-consent` and `hidden`.
-- Texts are resolved at build time from the page's language.
-- The exact element list of the placeholder is fixed in slice 2 and written back here; the data attributes above are fixed now.
+- The iframe keeps all its other attributes, in source order, except `src`, which moves to `data-consent-src` (root-absolute → `base_path`, D8); it gets `data-consent` first and `hidden` last. Its raw content (fallback text) is kept.
+- Texts are resolved at build time from the page's language (`meta.lang || app.lang`, else `en`).
+- **Element list (fixed in slice 2):** the wrapper holds exactly the iframe and `__placeholder`; `__placeholder` holds, in order, `p.__text` (`placeholder_text` with `{service}` escaped and `{provider}` in `<strong>`), `button.__load` (`placeholder_load`), `a.__privacy` (`service_privacy`, the service's `privacy_url`; **left out** when the service has none) and `button.__settings` (`placeholder_settings`). All text and attribute values are HTML-escaped. One renderer, `src/placeholder.js#renderPlaceholder` (D2), emits it on one line, without whitespace between elements.
+
+**Which iframes are gated.** An iframe is rewritten when the host of its `src` (entities decoded, resolved like a browser on an http **or** https page: protocol-relative `//host/…`, scheme-only `https:host/…`, backslashes, any case, a trailing dot dropped; `http(s)` only) equals a configured `hosts` entry or is a subdomain of one (`www.youtube.com` matches `youtube.com`; `notyoutube.com` and `youtube.com.evil.example` do not). With several matches the longest configured host wins (`maps.google.com` before `google.com`), ties go to the first configured. Root-absolute, relative and `data:`/`about:` sources stay on the site and are never gated. Iframes inside `<noscript>`, `<template>` and SVG `foreignObject` are found too. An iframe without a live `src` (already a placeholder) is left alone, so the rewrite is idempotent. The rewrite splices the page string at the parser's source offsets: everything that is not a matched iframe stays byte-identical, and a page without one is returned as the same object.
 
 ### Runtime hooks (D7)
 
@@ -359,7 +361,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 2 — Iframe rewrite, assets and core guard (`getMetaData`, `getAssets`)
 
-- [ ] `src/rewrite.js`, `src/placeholder.js` (D2), `src/guard.js`; host matching; rest of `content` byte-identical; integration build through `run()`. Write the placeholder element list back here.
+- [x] `src/rewrite.js`, `src/placeholder.js` (D2), `src/guard.js`; host matching; rest of `content` byte-identical; integration build through `run()`. Write the placeholder element list back here.
+
+**Done 2026-10-16.** Host matching and the placeholder element list are under "Gated iframes and the placeholder". `getMetaData` uses the `app.consent` that `getAppData` returned and checks core's version (`src/guard.js`, copied from plugin-code-blocks) unless the mode is `'none'`, where the site has no consent UI and needs no runtime. `getAssets` ships both files in every mode, so a layout's links never point at missing files. `assets/consent.{js,css}` are empty stubs until slice 3. The integration test builds a site through core's `run()` with and without `base_path`.
 
 ### Slice 3 — Runtime: `consent.js` and `consent.css`
 
