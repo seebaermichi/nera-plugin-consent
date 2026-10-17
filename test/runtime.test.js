@@ -711,9 +711,95 @@ describe('gated media (ROADMAP "Gated media")', () => {
 
         expect(document.getElementById('o').getAttribute('data')).toBe('https://yt.test/o')
         expect(iframes(window)[0].hasAttribute('src')).toBe(false)
-        inner.click()
+        // The object was replaced (step 11): its fallback's button is the clone's now.
+        expect(inner.isConnected).toBe(false)
+        document.querySelector('[data-consent-load]').click()
         expect(iframes(window)[0].getAttribute('src')).toBe('https://yt.test/inner')
         expect(window.localStorage.getItem(STORAGE_KEY)).toBe(null)
+    })
+})
+
+describe('gated <object> is replaced, not restored in place (TC-10)', () => {
+    // Chrome never re-evaluates an <object> that has fallen back, so `data`
+    // must be on the element when it enters the document.
+    const OBJECT =
+        wrapperStart('media') +
+        inertStartTag('object', { id: 'o', class: 'map', data: 'https://yt.test/o', type: 'text/html', width: '640' }, 'media') +
+        '<param name="autoplay" value="0"><p id="fallback">Fallback</p></object>' +
+        renderControls({ service: YOUTUBE, texts: TEXTS }) +
+        '</div>'
+
+    /** Remember the inert `<object>` the page was parsed with. */
+    const keepInert = (window) => {
+        window.inert = window.document.getElementById('o')
+    }
+
+    /** The `<object>` in the document is a new, active node with everything kept. */
+    function expectReplaced(window) {
+        const { document } = window
+        const live = document.getElementById('o')
+        expect(live).not.toBe(window.inert)
+        expect(window.inert.isConnected).toBe(false)
+        expect(document.querySelectorAll('object')).toHaveLength(1)
+        expect(live.getAttribute('data')).toBe('https://yt.test/o')
+        expect(live.hasAttribute('data-consent-data')).toBe(false)
+        expect(live.getAttribute('data-consent-state')).toBe('active')
+        expect(live.hidden).toBe(false)
+        expect(live.getAttribute('class')).toBe('map')
+        expect(live.getAttribute('type')).toBe('text/html')
+        expect(live.getAttribute('width')).toBe('640')
+        expect(live.getAttribute('data-consent')).toBe('media')
+        expect(live.querySelector('param').getAttribute('name')).toBe('autoplay')
+        expect(live.querySelector('#fallback').textContent).toBe('Fallback')
+        const wrapper = live.parentElement
+        expect(wrapper.hasAttribute('data-consent-embed')).toBe(true)
+        expect(wrapper.getAttribute('data-consent-state')).toBe('active')
+        expect(wrapper.querySelector('.nera-consent-embed__placeholder').hidden).toBe(true)
+        return live
+    }
+
+    it('on the two-click button', () => {
+        const window = load(banner() + OBJECT, { before: keepInert })
+        window.document.querySelector('[data-consent-load]').click()
+        expectReplaced(window)
+        expect(window.localStorage.getItem(STORAGE_KEY)).toBe(null)
+    })
+
+    it('on Accept all', () => {
+        const window = load(banner() + OBJECT, { before: keepInert })
+        expect(window.inert.hasAttribute('data')).toBe(false)
+        click(window, 'accept')
+        expectReplaced(window)
+    })
+
+    it('on a fresh load with consent stored', () => {
+        const window = load(banner() + OBJECT, { stored: choice(['media']), before: keepInert })
+        expectReplaced(window)
+    })
+
+    it('replaces an active <object> only once, however often consent is given', () => {
+        const window = load(banner() + dialog + OBJECT, { before: keepInert })
+        click(window, 'accept')
+        const live = expectReplaced(window)
+        click(window, 'accept')
+        window.neraConsent.open()
+        click(window, 'save')
+        window.document.querySelector('[data-consent-load]').click()
+        expect(window.document.getElementById('o')).toBe(live)
+    })
+
+    it('activates a granted embed inside the replaced object\'s fallback', () => {
+        const nested =
+            wrapperStart('media') +
+            inertStartTag('object', { id: 'o', data: 'https://yt.test/o' }, 'media') +
+            embed('https://yt.test/inner') + '</object>' +
+            renderControls({ service: YOUTUBE, texts: TEXTS }) +
+            '</div>'
+        const window = load(banner() + nested, { stored: choice(['media']) })
+        const [iframe] = iframes(window)
+        expect(window.document.getElementById('o').contains(iframe)).toBe(true)
+        expect(iframe.getAttribute('src')).toBe('https://yt.test/inner')
+        expect(iframe.getAttribute('data-consent-state')).toBe('active')
     })
 })
 

@@ -172,15 +172,25 @@
         if (!waiting) drain()
     }
 
-    /** Give every inert loading attribute its live name back. */
-    function restore(element) {
+    /** Give every inert loading attribute its live name back; `drop` removes the inert one. */
+    function restore(element, drop = false) {
         for (const name of LOADING) {
             const value = element.getAttribute(`data-consent-${name}`)
-            if (value !== null) element.setAttribute(name, value)
+            if (value === null) continue
+            element.setAttribute(name, value)
+            if (drop) element.removeAttribute(`data-consent-${name}`)
         }
     }
 
-    function activateEmbed(element) {
+    /**
+     * Activate one gated element. An `<object>` is replaced by a deep clone
+     * that already carries `data` when it enters the document: Chrome does not
+     * re-evaluate an `<object>` that has fallen back, so restoring `data` in
+     * place never starts the load.
+     */
+    function activateEmbed(inert) {
+        const replace = inert.tagName === 'OBJECT'
+        const element = replace ? inert.cloneNode(true) : inert
         element.setAttribute('data-consent-state', ACTIVE)
         element.hidden = false
         if (MEDIA.has(element.tagName)) {
@@ -192,8 +202,9 @@
             restore(element)
             if (typeof element.load === 'function') element.load()
         } else {
-            restore(element)
+            restore(element, replace)
         }
+        if (replace) inert.replaceWith(element)
         const wrapper = element.closest('[data-consent-embed]')
         if (!wrapper) return
         wrapper.setAttribute('data-consent-state', ACTIVE)
@@ -204,8 +215,14 @@
 
     function activateGranted() {
         activateScripts(gatedScripts().filter((script) => has(script.getAttribute('data-consent'))))
-        for (const element of gatedEmbeds()) {
-            if (has(element.getAttribute('data-consent'))) activateEmbed(element)
+        // A replaced `<object>` takes the gated embeds in its fallback with it,
+        // so the list is read again until nothing granted is left; elements of
+        // a replaced subtree are skipped and found in the clone next round.
+        let granted
+        while ((granted = gatedEmbeds().filter((element) => has(element.getAttribute('data-consent')))).length > 0) {
+            for (const element of granted) {
+                if (element.isConnected) activateEmbed(element)
+            }
         }
     }
 
