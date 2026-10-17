@@ -388,6 +388,10 @@ Details fixed in slice 3 (`assets/consent.js`), which the views follow:
 - **O3 — Digital Omnibus.** The browser-signal article was dropped in June 2026. Re-check before each minor release whether a browser-level signal must be honoured.
 - ~~**O4 — Can the info notice be switched off?**~~ **Decided 2026-10-16: yes**, `notice: false` (default `true`) → `app.consent.mode: 'none'`, the views render nothing. Ignored with a warning once a category exists, so it can never hide the banner. Not legal floor: the notice is informational.
 - **O5 — Reload on withdrawal?** Should saving a narrower choice reload the page so withdrawn scripts stop at once, instead of from the next navigation?
+- **O6 — `<object><param>` URLs.** `<param name="src|movie|url|code" value="…">` on a gated host is not a loading attribute, so it stays live; Chromium still derives an object URL from those names when `data` is absent, so legacy `<object><param name="movie">` markup without `data` is not gated at all. Gating them would widen the contract (which names, which inert form). Noted 2026-10-16 (step 8 of the first issue).
+- **O7 — Several services in one element.** An element whose gated URLs belong to two services of one category is gated correctly (one category), but the placeholder names only the first matched service and provider, so the D3 text under-discloses when the providers differ. Options: list every service and provider, or fail the build as for mixed categories. Noted 2026-10-16.
+- **O8 — Gated media inline in Markdown.** markdown-it does not treat `<video>` / `<audio>` / `<embed>` as block HTML, so a gated one written inline lands inside `<p>`, and the `div.nera-consent-embed` wrapper makes the browser split it into empty `<p>`s (extra spacing, no loading issue). Changing the wrapper element is a markup-contract change. Noted 2026-10-16.
+- **O9 — Focus after a placeholder-opened dialog activates its embed.** The placeholder (the opener) is hidden by the activation and focus drops to `<body>`; candidates are the activated element or the site's settings link. Noted 2026-10-16 (step 9).
 
 ---
 
