@@ -216,7 +216,7 @@ texts:
 
 ## Markup contract
 
-The attributes below and the BEM classes are public contract (`@nera-static/validate` reads them); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute. The full specification is in [ROADMAP.md](ROADMAP.md).
+The attributes below and the BEM classes are public contract (a coming `@nera-static/validate` release will read them); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute. The full specification is in [ROADMAP.md](ROADMAP.md).
 
 ### Gated scripts
 
@@ -358,6 +358,8 @@ Every default text pair reaches a contrast of at least 4.5:1, focus ring and bor
 - **Withdrawing takes effect from the next page load.** A script that already ran cannot be unloaded; the narrower choice is stored at once.
 - **Google Consent Mode v2** is not supported yet.
 - The plugin sees your pages' content, not your layout: iframes written directly into a Pug view are not rewritten. Use the `+consent-embed` mixin there.
+- `<object>` URLs given only through `<param name="movie">` (or `src`, `url`, `code`) are not gated; give the `<object>` a `data` attribute.
+- A gated `<video>`, `<audio>` or `<embed>` written inline in a Markdown paragraph ends up inside `<p>`, and the browser splits that paragraph around the placeholder (extra spacing only). Put its opening tag alone on a line, after a blank line, so Markdown keeps it as a block.
 
 ## Compatibility
 
