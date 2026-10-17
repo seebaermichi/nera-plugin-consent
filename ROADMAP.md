@@ -438,7 +438,9 @@ Each slice is one session. Tick, date, note.
 
 ### Slice 6 — Release (maintainer)
 
-- [ ] 1.0.0 bootstrap-published by hand; a CI OIDC x.y.1 within ~2 days (the Trusted Publisher expires otherwise); `generator/PLUGINS.md` + the three `nera-website` catalogs; GitHub repo secured with `fleet-check.sh --fix`; follow-ups filed: `[nera-validate]` recognise `data-consent` in `privacy-third-party`, `[nera-website]` tutorial.
+- [x] 1.0.0 bootstrap-published by hand; a CI OIDC x.y.1 within ~2 days (the Trusted Publisher expires otherwise); `generator/PLUGINS.md` + the three `nera-website` catalogs; GitHub repo secured with `fleet-check.sh --fix`; follow-ups filed: `[nera-validate]` recognise `data-consent` in `privacy-third-party`, `[nera-website]` tutorial.
+
+**Done 2026-10-17.** 1.0.0 bootstrap-published by hand; the Trusted Publisher set with `npm trust github` (npm ≥ 11.15, needs a 2FA login, like the bootstrap publish); 1.0.1 (a README fix) published by CI OIDC the same day, which validated it. Repo github.com/seebaermichi/nera-plugin-consent, `protect-main` ruleset and secret scanning via `fleet-check.sh --fix`, private vulnerability reporting on. Listed in `generator/PLUGINS.md` (19 plugins) and the three `nera-website` catalogs. The `[nera-validate]` follow-up is `01a143bd-7f8c-70de-8b70-3fcd1636521f`; the `[nera-website]` tutorial is not filed yet.
 
 ---
 
@@ -452,4 +454,4 @@ Public contract: config keys and defaults, `app.consent`, the markup contract (a
 - [x] Tests: config → banner / `app.consent`; iframe rewrite (match / no match / rest byte-identical); gated script include (head view); no categories → info notice; revision bump asks again; a stored notice choice does not count on a banner page.
 - [x] Fixture site builds clean with `nera build --check` (no `a11y-*`; `privacy-third-party` only where deliberately ungated).
 - [x] Manual browser test: nothing gated before consent, Reject all works, the settings link reopens the dialog (slice 4's walkthrough, 2026-10-16).
-- [ ] Released per the brand-new-package rule, listed in the catalogs, repo secured.
+- [x] Released per the brand-new-package rule, listed in the catalogs, repo secured (2026-10-17).
