@@ -216,7 +216,7 @@ texts:
 
 ## Markup contract
 
-The attributes below and the BEM classes are public contract (a coming `@nera-static/validate` release will read them); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute.
+The attributes below and the BEM classes are public contract (`@nera-static/validate` 1.6.0 and later read them: `privacy-third-party` skips gated markup, and `privacy-consent-leak` reports an element marked `data-consent` that still loads); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute.
 
 ### Gated scripts
 
