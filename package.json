@@ -1,6 +1,6 @@
 {
     "name": "@nera-static/plugin-consent",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "A plugin for Nera static site generator that adds a consent banner and settings dialog, and keeps scripts and embeds inert until the visitor agrees, all from config/consent.yaml.",
     "main": "index.js",
     "scripts": {

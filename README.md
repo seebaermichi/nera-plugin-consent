@@ -152,7 +152,7 @@ Paste the embed code into your Markdown as usual:
 
 When the host of its `src` equals a configured `hosts` entry or is a subdomain of it (`www.youtube.com` matches `youtube.com`; `notyoutube.com` does not), the build replaces it with the two-click placeholder below. Everything else in the page stays byte for byte as it was. Iframes from your own site (root-absolute or relative `src`) are never gated.
 
-`<embed>`, `<object>`, `<video>` and `<audio>` are gated the same way when they load from a configured host — through `src`, `data` or `poster`, or for video and audio through a `<source>` or `<track>` child. Their loading attributes become `data-consent-src`, `data-consent-data`, `data-consent-poster` and `data-consent-srcset` until consent, and the same placeholder follows them. An element mixing services of two categories fails the build: split it into one element per category. Images (`<img>`, `<picture>`) are not gated. Details: [ROADMAP.md](ROADMAP.md#gated-media).
+`<embed>`, `<object>`, `<video>` and `<audio>` are gated the same way when they load from a configured host — through `src`, `data` or `poster`, or for video and audio through a `<source>` or `<track>` child. Their loading attributes become `data-consent-src`, `data-consent-data`, `data-consent-poster` and `data-consent-srcset` until consent, and the same placeholder follows them. An element mixing services of two categories fails the build: split it into one element per category. Images (`<img>`, `<picture>`) are not gated. Details: [Gated media](#gated-media).
 
 A gated iframe loses a `srcdoc` attribute, which would otherwise render before consent. An iframe or media element the build cannot reach, such as one inside a `<select>`, keeps its live `src`; the build warns with the page and the host, so move it out or use the mixin below.
 
@@ -216,7 +216,7 @@ texts:
 
 ## Markup contract
 
-The attributes below and the BEM classes are public contract (a coming `@nera-static/validate` release will read them); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute. The full specification is in [ROADMAP.md](ROADMAP.md).
+The attributes below and the BEM classes are public contract (a coming `@nera-static/validate` release will read them); renaming any of them is a major release. The runtime binds to the `data-consent*` attributes only, never to classes: restyle or rename classes in your published views freely, but keep every `data-consent*` attribute.
 
 ### Gated scripts
 
@@ -228,7 +228,7 @@ The attributes below and the BEM classes are public contract (a coming `@nera-st
 
 - `type="text/plain"` makes the element inert until the runtime activates it.
 - `data-consent="<category id>"` — required; the category whose consent activates it.
-- `data-src` — the script URL (root-absolute values get `base_path`, D8); absent for an inline script.
+- `data-src` — the script URL (root-absolute values get `base_path`); absent for an inline script.
 - `data-type="module"` — activated as `type="module"`.
 - Every other attribute (`async`, `defer`, `integrity`, `crossorigin`, `nonce`, `id`, `data-*` …) is copied to the activated script unchanged.
 
@@ -248,6 +248,26 @@ The attributes below and the BEM classes are public contract (a coming `@nera-st
 
 The build writes it on one line; it is shown indented here.
 
+### Gated media
+
+```html
+<div class="nera-consent-embed" data-consent-embed data-consent="media">
+    <video data-consent="media" controls data-consent-poster="https://cdn.example.com/p.jpg" hidden>
+        <source data-consent-src="https://cdn.example.com/v.webm" type="video/webm">
+        <track data-consent-src="https://cdn.example.com/c.vtt" kind="captions">
+        …fallback content…
+    </video>
+    <div class="nera-consent-embed__placeholder">…the same controls as for an iframe…</div>
+</div>
+```
+
+- **Which elements.** Besides `<iframe>`, the build gates `<embed>`, `<object>`, `<video>` and `<audio>`. An element is gated when any URL it loads through a loading attribute has a configured host, matched exactly as for iframes: `embed[src]`, `object[data]`, `video[src]`, `video[poster]`, `audio[src]`, and for `<video>` / `<audio>` also their child `<source src>`, `<source srcset>` (every candidate URL) and `<track src>`.
+- **Inert form.** Every loading attribute of a gated element and of its `<source>` / `<track>` children is renamed in place to `data-consent-<name>` (`data-consent-src`, `data-consent-data`, `data-consent-poster`, `data-consent-srcset`), own-host ones included, so nothing of the element loads before consent. The element gets `data-consent="<category>"` and `hidden`; children get neither. Every other attribute stays, in source order.
+- **Wrapper and controls.** The same `div.nera-consent-embed` wrapper and placeholder as for an iframe; the placeholder follows the element. The element's fallback content is kept as is, except that gated elements inside it are gated in turn, each with its own placeholder.
+- **Mixed categories fail the build.** An element whose gated URLs belong to services of different categories cannot be gated by one `data-consent`, so the build fails with the page, the tag and the categories. Split such an element into one per category.
+- **Not gated:** `<img>`, `<picture>` and its `<source srcset>`, CSS `url()`, `<link>`. Own-host and relative URLs never gate an element. The `+consent-embed` mixin renders iframes only.
+- **Runtime.** Activating a gated element (consent, or its placeholder's load button) drops `hidden`, sets every `data-consent-<name>` back as `<name>` (on a media element its `<source>` / `<track>` children first) and calls `load()` on `<video>` / `<audio>`. A placeholder's load button activates only the element directly in its wrapper, never a gated element nested in that element's fallback.
+
 ### Runtime hooks
 
 | attribute | on | meaning |
@@ -260,8 +280,8 @@ The build writes it on one line; it is shown indented here.
 | `data-consent-poster` | gated `<video>` | the `poster` URL |
 | `data-consent-srcset` | `<source>` in a gated `<video>` / `<audio>` | the `srcset` |
 | `data-consent-embed` | placeholder wrapper | one two-click embed |
-| `data-consent-load` | button in a placeholder | load this one embed now (D3) |
-| `data-consent-open` | any element | open the settings dialog (D4) |
+| `data-consent-load` | button in a placeholder | load this one embed now |
+| `data-consent-open` | any element | open the settings dialog |
 | `data-consent-banner` | banner root | carries `data-consent-revision` and `data-consent-categories` (space-separated ids) |
 | `data-consent-notice` | notice root | carries `data-consent-revision` |
 | `data-consent-dialog` | the settings `<dialog>` | |
@@ -273,7 +293,14 @@ The build writes it on one line; it is shown indented here.
 
 ### BEM blocks
 
-`nera-consent` (the banner; `nera-consent--notice` for the notice), `nera-consent-dialog` (the settings dialog) and `nera-consent-embed` (the placeholder). The element lists are in [ROADMAP.md](ROADMAP.md#bem-blocks).
+`nera-consent` (the banner; `nera-consent--notice` for the notice), `nera-consent-dialog` (the settings dialog) and `nera-consent-embed` (the placeholder). All styling uses `--nera-consent-*` custom properties (see [Theming](#theming)). The elements, as the published views render them:
+
+- **`section.nera-consent`** (`views/banner.pug`, `data-consent-banner`, `aria-labelledby` → the title, rendered `hidden`): `h2.__title#nera-consent-title`, `p.__text` (`banner_text`, then `a.__link` → privacy page, left out without `privacy_url`), `div.__actions` with exactly three `button.__button` in fixed order: Accept all (`data-consent-accept-all`), Reject all (`data-consent-reject-all`), Settings (`data-consent-open`). No modifier on any of them.
+- **`section.nera-consent.nera-consent--notice`** (`views/notice.pug`, `data-consent-notice`, `aria-labelledby` → its text, rendered `hidden`): `p.__text#nera-consent-notice-text` (`notice_text` + `a.__link`), `div.__actions` with one `button.__button` (`data-consent-dismiss`).
+- **`dialog.nera-consent-dialog`** (`views/settings.pug`, `data-consent-dialog`, `aria-labelledby` → its title): one `form.__form[method=dialog]` holding `button.__close[type=submit]` (× with `aria-label`/`title` = `close`), `h2.__title#nera-consent-dialog-title`, `p.__text` (+ `a.__link`), then one `div.__category` per category: first `necessary` (its checkbox `checked disabled`, no `data-consent-category`, `span.__status` "(Always active)"), then each configured one: `label.__label` wrapping `input.__checkbox[type=checkbox][data-consent-category]` (never `checked` in the markup) and the label text, `p.__description` when there is one, and per service `div.__service` with `h3.__service-name`, `dl.__details` (provider, purpose), `p > a.__link` (the service's privacy link, when set) and `table.__table` (caption `cookies_heading`, columns name/duration/purpose; only when the service lists cookies). Last `div.__actions` with three `button.__button`: Accept all, Reject all, Save selection (`data-consent-save`).
+- **`div.nera-consent-embed`**: the placeholder under [Gated iframes](#gated-iframes) (`views/embed.pug` renders it too).
+
+`views/head.pug` emits no classes: only the gated `<script>` elements of [Gated scripts](#gated-scripts), inline code raw with `</script` and `<!--` escaped (`<\/script`, `<\!--`) so it cannot end the element.
 
 ## JavaScript API
 
@@ -281,7 +308,7 @@ The runtime exposes `window.neraConsent`:
 
 | member | returns | |
 |---|---|---|
-| `open()` | `undefined` | opens the settings dialog, stored choice ticked (D4) |
+| `open()` | `undefined` | opens the settings dialog, stored choice ticked |
 | `get()` | `{ categories, revision, timestamp, mode }` or `null` | a copy of the current valid choice |
 | `has(id)` | boolean | `true` for `necessary`; else whether `id` is granted |
 
@@ -305,7 +332,37 @@ The choice is stored in `localStorage` under `nera-consent`, as JSON:
 
 ## `app.consent`
 
-`getAppData` adds `app.consent` for your own views and your privacy page: `mode` (`'banner'`, `'notice'` or `'none'`), `revision`, `storageKey`, `languages`, `locales` (per language: `privacyUrl`, every text, and the categories with their services and cookies), `scripts` and `hosts`. The full shape is in [ROADMAP.md](ROADMAP.md#appconsent-written-by-getappdata). To list your services on the privacy page:
+`getAppData` adds `app.consent` for your own views and your privacy page, keeping every other `app` key:
+
+```js
+app.consent = {
+    mode: 'banner',               // 'banner' with ≥ 1 category, else 'notice' ('none' with `notice: false`)
+    revision: 1,
+    storageKey: 'nera-consent',
+    languages: ['de', 'en'],      // app.lang, every meta.lang, every `texts` language, always `en`
+    locales: {
+        de: {
+            privacyUrl: '/datenschutz.html',   // base_path applied; null when unset
+            texts: { banner_title: '…', /* every key under "Texts and languages" */ },
+            categories: [{
+                id: 'analytics', label: '…', description: '…',
+                services: [{
+                    name, provider, purpose, privacyUrl,
+                    cookies: [{ name, duration, purpose }],
+                }],
+            }],
+        },
+        en: { /* same shape */ },
+    },
+    scripts: [                    // language-independent, document order
+        { category: 'analytics', service: 'Matomo', src: 'https://…', async: true, defer: false, module: false },
+        { category: 'analytics', service: 'Matomo', inline: 'var _paq = …', async: false, defer: false, module: false },
+    ],
+    hosts: [{ category: 'media', service: 'YouTube', host: 'youtube.com' }],
+}
+```
+
+Renaming or restructuring any of these keys is a major release. To list your services on the privacy page:
 
 ```pug
 - const consentLocale = app.consent.locales[meta.lang || app.lang] || app.consent.locales.en
@@ -374,7 +431,7 @@ npx vitest run
 npm run lint
 ```
 
-`npm test` runs Vitest in watch mode. The runtime tests run in happy-dom; the fixture tests build `test/fixture/` with the real `@nera-static/core` in a temp directory and check the output with `@nera-static/validate`. The spec is [ROADMAP.md](ROADMAP.md).
+`npm test` runs Vitest in watch mode. The runtime tests run in happy-dom; the fixture tests build `test/fixture/` with the real `@nera-static/core` in a temp directory and check the output with `@nera-static/validate`.
 
 ## 📦 License
 
