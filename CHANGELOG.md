@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-21
+
+### Added
+
+-   `google_consent_mode` in `config/consent.yaml` (default `false`): Google Consent Mode v2 signals in basic mode. `true` maps `analytics` → `analytics_storage` and `marketing` → `ad_storage`, `ad_user_data`, `ad_personalization`, for the categories the site configures; `signals: { <category>: [<signal>, …] }` replaces that mapping. Unknown signals, `necessary`, unconfigured categories and a signal mapped twice warn and are dropped; with nothing left to map the feature stays off, with a warning.
+-   `app.consent.google` (`null` when off, else `{ signals, defaults }`).
+-   The head view emits, before the gated scripts, one live inline script with the `dataLayer` / `gtag` stub and `gtag('consent', 'default', …)`, every mapped signal and the four v2 signals `denied`. Its new `data-consent-google` attribute (markup contract) carries the category → signals map.
+-   The runtime sends `gtag('consent', 'update', …)` with every mapped signal `granted` or `denied`, on load from a stored choice and on every new choice, each time before the granted gated scripts activate; withdrawing a category sends `denied` at once.
+-   README: "Google Consent Mode v2" — configuration, mapping, basic mode with a gated Google tag, why advanced mode is not configurable, and that a granted tag still sends data to Google.
+
 ## [1.0.3] - 2026-10-25
 
 ### Fixed

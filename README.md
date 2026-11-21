@@ -19,6 +19,7 @@ A plugin for the [Nera](https://github.com/seebaermichi/nera) static site genera
 - Gated embeds: an `<iframe>`, `<embed>`, `<object>`, `<video>` or `<audio>` from a configured host in your Markdown becomes a two-click placeholder at build time, with no live `src`
 - No categories configured → only an info notice ("only technically necessary cookies"), or nothing at all
 - Bump `revision` to ask every visitor again
+- Optional Google Consent Mode v2 signals (`default` all denied, `update` from the visitor's choice) for sites with Google tags
 - German and English texts built in, any other language by config
 - A small vanilla runtime and stylesheet, themed through `--nera-consent-*` custom properties, with no third-party library
 
@@ -128,6 +129,9 @@ categories:
 texts:
     fr:
         banner_title: Cookies et contenus externes
+
+# Google Consent Mode v2 signals (see "Google Consent Mode v2"). Default: false.
+google_consent_mode: true
 ```
 
 `label`, `description`, `purpose`, `privacy_url` and a cookie's `duration` and `purpose` take one text or one text per language (`{ de: …, en: … }`).
@@ -176,6 +180,57 @@ Pass the iframe's attributes in `attributes`, not as Pug attributes. `category` 
 ### Your own gated scripts
 
 Anything you can configure under `scripts` you can also write by hand, anywhere in a page or view, in the same form (see [Markup contract](#markup-contract)). The runtime treats both alike.
+
+## Google Consent Mode v2
+
+Sites that load Google tags (gtag.js, Google Tag Manager) for visitors in the EEA are expected by Google to send Consent Mode v2 signals: a `default` state before any Google tag runs and an `update` once the visitor chooses. The plugin sends both when you turn it on. It is off by default; without the key the plugin writes nothing to `dataLayer`.
+
+```yaml
+# The default mapping, restricted to the categories you configure:
+#   analytics → analytics_storage
+#   marketing → ad_storage, ad_user_data, ad_personalization
+google_consent_mode: true
+
+# Or your own mapping, which replaces the default one. A signal may be one
+# name or a list.
+# google_consent_mode:
+#     signals:
+#         analytics: [analytics_storage]
+#         marketing: [ad_storage, ad_user_data, ad_personalization]
+#         functional: functionality_storage
+```
+
+Known signals: `ad_storage`, `ad_user_data`, `ad_personalization`, `analytics_storage`, `functionality_storage`, `personalization_storage`, `security_storage`. Each signal belongs to one category.
+
+What is checked: a value that is neither `true`/`false` nor a map, or a `signals` that is not a map, warns and turns the feature off. An unknown signal, the category `necessary`, a category you have not configured, and a signal an earlier category already maps warn and are dropped. When nothing is left to map (always so without categories), the feature is off, with a warning.
+
+What the plugin sends:
+
+- **`default`.** The head view (`views/vendor/plugin-consent/head.pug`) emits one live inline script before the gated scripts: the `dataLayer` / `gtag` stub and `gtag('consent', 'default', …)` with every mapped signal plus `ad_storage`, `ad_user_data`, `ad_personalization` and `analytics_storage` set to `denied`. No signal is ever granted by default. Keep the head include above every Google tag in your layout.
+- **`update`.** The runtime sends `gtag('consent', 'update', …)` with every mapped signal `granted` or `denied`, on page load when a valid choice is stored and on every new choice, each time before the granted gated scripts run. Withdrawing a category sends `denied` at once. Without a stored choice nothing is sent, and without the default script on the page the runtime sends no update.
+
+**Basic mode only.** Put the Google tag itself under `scripts` of the service it belongs to, like any other gated script: it stays inert until its category is granted, so Google receives nothing before consent, and the signals tell it what the visitor agreed to once it loads.
+
+```yaml
+categories:
+    - id: analytics
+      services:
+          - name: Google Analytics
+            provider: Google Ireland Limited, Dublin
+            purpose: Counts visits and how pages are used.
+            privacy_url: https://policies.google.com/privacy
+            scripts:
+                - src: https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX
+                  async: true
+                - inline: |
+                      gtag('js', new Date());
+                      gtag('config', 'G-XXXXXXX');
+google_consent_mode: true
+```
+
+**Advanced mode is not configurable.** In Google's advanced mode the tag loads before consent and sends cookieless pings while consent is denied. You could only get it by placing the Google tag ungated in your layout yourself. That sends data to Google (at least the visitor's IP address) before the visitor has chosen anything, and `nera build --check` reports the ungated tag (`privacy-third-party`). The plugin offers no key for it.
+
+Consent Mode does not make Google tags harmless: once a category is granted, the tag loads and sends data to Google as it always does. The signals only tell Google which consent the visitor gave. Name Google in your categories and your privacy policy as for any other service. This section describes what the plugin does, not what the law requires of your site — it is not legal advice.
 
 ## Texts and languages
 
@@ -231,6 +286,17 @@ The attributes below and the BEM classes are public contract (`@nera-static/vali
 - `data-src` — the script URL (root-absolute values get `base_path`); absent for an inline script.
 - `data-type="module"` — activated as `type="module"`.
 - Every other attribute (`async`, `defer`, `integrity`, `crossorigin`, `nonce`, `id`, `data-*` …) is copied to the activated script unchanged.
+
+### Google Consent Mode default
+
+```html
+<script data-consent-google="{&quot;analytics&quot;:[&quot;analytics_storage&quot;]}">window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments) } gtag('consent', 'default', {"ad_storage":"denied",…});</script>
+```
+
+- `data-consent-google` — JSON map of category id → Consent Mode signals (`app.consent.google.signals`). The runtime sends `gtag('consent', 'update', …)` from it; without this element on the page it sends nothing.
+- The script is live (no `type`), emitted by the head include **before** the gated scripts, so the `default` runs before any Google tag.
+
+Only with `google_consent_mode` on (see [Google Consent Mode v2](#google-consent-mode-v2)).
 
 ### Gated iframes
 
@@ -290,6 +356,7 @@ The build writes it on one line; it is shown indented here.
 | `data-consent-category="<id>"` | checkbox in the dialog | one category |
 | `data-consent-dismiss` | "Got it" in the notice | store the notice as seen |
 | `data-consent-state="active"` | gated script / iframe / media element, set by the runtime | already activated (never twice) |
+| `data-consent-google` | the Consent Mode default `<script>` (head include) | category → signals map the runtime sends `update` from |
 
 ### BEM blocks
 
@@ -300,7 +367,7 @@ The build writes it on one line; it is shown indented here.
 - **`dialog.nera-consent-dialog`** (`views/settings.pug`, `data-consent-dialog`, `aria-labelledby` → its title): one `form.__form[method=dialog]` holding `button.__close[type=submit]` (× with `aria-label`/`title` = `close`), `h2.__title#nera-consent-dialog-title`, `p.__text` (+ `a.__link`), then one `div.__category` per category: first `necessary` (its checkbox `checked disabled`, no `data-consent-category`, `span.__status` "(Always active)"), then each configured one: `label.__label` wrapping `input.__checkbox[type=checkbox][data-consent-category]` (never `checked` in the markup) and the label text, `p.__description` when there is one, and per service `div.__service` with `h3.__service-name`, `dl.__details` (provider, purpose), `p > a.__link` (the service's privacy link, when set) and `table.__table` (caption `cookies_heading`, columns name/duration/purpose; only when the service lists cookies). Last `div.__actions` with three `button.__button`: Accept all, Reject all, Save selection (`data-consent-save`).
 - **`div.nera-consent-embed`**: the placeholder under [Gated iframes](#gated-iframes) (`views/embed.pug` renders it too).
 
-`views/head.pug` emits no classes: only the gated `<script>` elements of [Gated scripts](#gated-scripts), inline code raw with `</script` and `<!--` escaped (`<\/script`, `<\!--`) so it cannot end the element.
+`views/head.pug` emits no classes: only the [Google Consent Mode default](#google-consent-mode-default) script (when on) and the gated `<script>` elements of [Gated scripts](#gated-scripts), inline code raw with `</script` and `<!--` escaped (`<\/script`, `<\!--`) so it cannot end the element.
 
 ## JavaScript API
 
@@ -359,6 +426,12 @@ app.consent = {
         { category: 'analytics', service: 'Matomo', inline: 'var _paq = …', async: false, defer: false, module: false },
     ],
     hosts: [{ category: 'media', service: 'YouTube', host: 'youtube.com' }],
+    google: null,                 // or, with google_consent_mode on:
+    // google: {
+    //     signals: { analytics: ['analytics_storage'] },     // category → signals, category order
+    //     defaults: { ad_storage: 'denied', ad_user_data: 'denied',
+    //                 ad_personalization: 'denied', analytics_storage: 'denied' },
+    // },
 }
 ```
 
@@ -413,7 +486,7 @@ Every default text pair reaches a contrast of at least 4.5:1, focus ring and bor
 ## Known limitations
 
 - **Withdrawing takes effect from the next page load.** A script that already ran cannot be unloaded; the narrower choice is stored at once.
-- **Google Consent Mode v2** is not supported yet.
+- **Google Consent Mode v2** runs in basic mode only; advanced mode (the tag loading before consent) is not configurable, see [Google Consent Mode v2](#google-consent-mode-v2).
 - The plugin sees your pages' content, not your layout: iframes written directly into a Pug view are not rewritten. Use the `+consent-embed` mixin there.
 - `<object>` URLs given only through `<param name="movie">` (or `src`, `url`, `code`) are not gated; give the `<object>` a `data` attribute.
 - A gated `<video>`, `<audio>` or `<embed>` written inline in a Markdown paragraph ends up inside `<p>`, and the browser splits that paragraph around the placeholder (extra spacing only). Put its opening tag alone on a line, after a blank line, so Markdown keeps it as a block.

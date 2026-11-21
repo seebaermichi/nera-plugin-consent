@@ -60,3 +60,17 @@ notice: true
 # texts:
 #     fr:
 #         banner_title: Cookies et contenus externes
+
+# Google Consent Mode v2 (off by default). true → analytics: analytics_storage;
+# marketing: ad_storage, ad_user_data, ad_personalization, only for the
+# categories configured above. The head view then sends gtag('consent',
+# 'default', …) with everything denied, and the runtime sends 'update' from
+# the visitor's choice. Basic mode only: keep the Google tag itself under a
+# service's scripts, gated. Known signals: ad_storage, ad_user_data,
+# ad_personalization, analytics_storage, functionality_storage,
+# personalization_storage, security_storage.
+# google_consent_mode: true
+# google_consent_mode:
+#     signals:
+#         analytics: [analytics_storage]
+#         marketing: [ad_storage, ad_user_data, ad_personalization]
