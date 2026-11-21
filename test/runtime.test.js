@@ -1,8 +1,10 @@
 import fs from 'fs'
 import path from 'path'
+import pug from 'pug'
 import { Window } from 'happy-dom'
 import { afterEach, describe, expect, it } from 'vitest'
-import { STORAGE_KEY } from '../src/app-consent.js'
+import { STORAGE_KEY, buildAppConsent } from '../src/app-consent.js'
+import { normalizeConfig } from '../src/config.js'
 import { inertStartTag, renderControls, renderPlaceholder, wrapperStart } from '../src/placeholder.js'
 
 // The runtime runs in a happy-dom window per page load. Inline gated scripts
@@ -829,5 +831,213 @@ describe('notice mode', () => {
         const window = load(notice(), { stored: choice(['media']) })
         expect(window.document.querySelector('[data-consent-notice]').hidden).toBe(true)
         expect(window.neraConsent.get().categories).toEqual([])
+    })
+})
+
+describe('Google Consent Mode (ROADMAP "Google Consent Mode", GC6)', () => {
+    const SIGNALS = {
+        analytics: ['analytics_storage'],
+        media: ['ad_storage', 'ad_user_data', 'ad_personalization'],
+    }
+    const DEFAULT = ['consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+    }]
+
+    const update = ({ analytics = 'denied', media = 'denied' } = {}) => ['consent', 'update', {
+        analytics_storage: analytics,
+        ad_storage: media,
+        ad_user_data: media,
+        ad_personalization: media,
+    }]
+
+    /** Run the head include's live default script, as the parser would, before the runtime. */
+    const withDefault = (attribute = JSON.stringify(SIGNALS)) => (window) => {
+        const script = window.document.createElement('script')
+        script.setAttribute('data-consent-google', attribute)
+        script.text = 'window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments) } ' +
+            `gtag('consent', 'default', ${JSON.stringify(DEFAULT[2])});`
+        window.document.head.appendChild(script)
+    }
+
+    const google = (body, options = {}) => load(body, { before: withDefault(), ...options })
+
+    /** `dataLayer` as plain arrays; every entry must be an `arguments` object, as gtag pushes. */
+    function layer(window) {
+        return (window.dataLayer ?? []).map((entry) => {
+            expect(Object.prototype.toString.call(entry)).toBe('[object Arguments]')
+            return Array.from(entry)
+        })
+    }
+
+    it('is off without a default script: nothing is written to dataLayer', () => {
+        const window = load(PAGE, { stored: choice(['analytics']) })
+        click(window, 'reject')
+        click(window, 'settings')
+        click(window, 'dialog-accept')
+        expect(window.dataLayer).toBeUndefined()
+    })
+
+    it('sends no update before a choice', () => {
+        const window = google(PAGE)
+        expect(layer(window)).toEqual([DEFAULT])
+        expectNothingActive(window)
+    })
+
+    it('sends the stored choice on load', () => {
+        const window = google(PAGE, { stored: choice(['analytics']) })
+        expect(layer(window)).toEqual([DEFAULT, update({ analytics: 'granted' })])
+    })
+
+    it('sends nothing for a stored choice of another revision', () => {
+        const window = google(PAGE, { stored: choice(['analytics', 'media'], { revision: 0 }) })
+        expect(layer(window)).toEqual([DEFAULT])
+    })
+
+    it('Accept all grants every mapped signal', () => {
+        const window = google(PAGE)
+        click(window, 'accept')
+        expect(layer(window)).toEqual([DEFAULT, update({ analytics: 'granted', media: 'granted' })])
+    })
+
+    it('Reject all denies every mapped signal', () => {
+        const window = google(PAGE)
+        click(window, 'reject')
+        expect(layer(window)).toEqual([DEFAULT, update()])
+    })
+
+    it('Save grants exactly the ticked categories', () => {
+        const window = google(PAGE)
+        click(window, 'settings')
+        click(window, 'cb-media')
+        click(window, 'save')
+        expect(layer(window)).toEqual([DEFAULT, update({ media: 'granted' })])
+    })
+
+    it('a withdrawal sends denied at once', () => {
+        const window = google(PAGE, { stored: choice(['analytics', 'media']) })
+        window.neraConsent.open()
+        click(window, 'cb-analytics')
+        click(window, 'save')
+        expect(layer(window)).toEqual([
+            DEFAULT,
+            update({ analytics: 'granted', media: 'granted' }),
+            update({ media: 'granted' }),
+        ])
+    })
+
+    it.each([
+        ['invalid JSON', '{"analytics":'],
+        ['a list', '["analytics_storage"]'],
+        ['a signal that is no list', '{"analytics":"analytics_storage"}'],
+        ['a non-string signal', '{"analytics":[1]}'],
+    ])('sends nothing for %s, and the runtime still works', (_, attribute) => {
+        const window = load(PAGE, { before: withDefault(attribute) })
+        click(window, 'accept')
+        expect(layer(window)).toEqual([DEFAULT])
+        expect(window.log).toContain('a1')
+    })
+
+    describe('order with the real views: default → update → the gated tag', () => {
+        const config = {
+            revision: 1,
+            google_consent_mode: true,
+            categories: [{
+                id: 'analytics',
+                services: [{
+                    name: 'Google Analytics',
+                    provider: 'Google Ireland Limited',
+                    purpose: 'Counts visits.',
+                    scripts: [
+                        { src: 'https://www.googletagmanager.com/gtag/js?id=G-TEST', async: true },
+                        // Google's own snippet, which defines its own gtag.
+                        {
+                            inline: 'window.dataLayer = window.dataLayer || []; ' +
+                                'function gtag() { dataLayer.push(arguments) } ' +
+                                'gtag(\'js\', \'start\'); gtag(\'config\', \'G-TEST\')',
+                        },
+                    ],
+                }],
+            }],
+        }
+        const app = { lang: 'en', basePath: '' }
+        const views = path.resolve('views')
+        const render = (name) => pug.render(`include /${name}`, {
+            doctype: 'html',
+            filename: path.join(views, '__test.pug'),
+            basedir: views,
+            app: { ...app, consent: buildAppConsent(normalizeConfig(config), { app, pagesData: [] }) },
+            meta: {},
+        })
+
+        const head = render('head')
+        const body = render('banner') + render('settings')
+
+        /** Put the head include in `<head>`; its live script runs, as the parser would run it. */
+        const parseHead = (window) => {
+            const { document } = window
+            document.head.innerHTML = head
+            for (const inert of document.head.querySelectorAll('script:not([type])')) {
+                const live = document.createElement('script')
+                for (const { name, value } of inert.attributes) live.setAttribute(name, value)
+                live.text = inert.text
+                inert.replaceWith(live)
+            }
+        }
+
+        const GA_DEFAULT = ['consent', 'default', {
+            ad_storage: 'denied',
+            ad_user_data: 'denied',
+            ad_personalization: 'denied',
+            analytics_storage: 'denied',
+        }]
+        const GA_GRANTED = ['consent', 'update', { analytics_storage: 'granted' }]
+        const TAG = [['js', 'start'], ['config', 'G-TEST']]
+
+        /** `dataLayer` once the Google tag itself was activated. */
+        const timeline = (window) => {
+            const tag = window.document.querySelector('script[src*="googletagmanager"]')
+            expect(tag?.getAttribute('data-consent-state')).toBe('active')
+            return layer(window)
+        }
+
+        const acceptAll = (window) => window.document.querySelector('[data-consent-accept-all]').click()
+
+        it('the head include puts the default before the gated scripts', () => {
+            expect(head.indexOf('data-consent-google')).toBeGreaterThanOrEqual(0)
+            expect(head.indexOf('data-consent-google')).toBeLessThan(head.indexOf('type="text/plain"'))
+        })
+
+        it('on a choice', () => {
+            const window = load(body, { before: parseHead })
+            expect(layer(window)).toEqual([GA_DEFAULT])
+            acceptAll(window)
+            expect(timeline(window)).toEqual([GA_DEFAULT, GA_GRANTED, ...TAG])
+        })
+
+        it('on a page load with the choice stored', () => {
+            const window = load(body, { before: parseHead, stored: choice(['analytics']) })
+            expect(timeline(window)).toEqual([GA_DEFAULT, GA_GRANTED, ...TAG])
+        })
+
+        it.each([
+            ['a choice', null, acceptAll],
+            ['a page load with the choice stored', choice(['analytics']), () => {}],
+        ])('the update precedes the external Google tag on %s', (_, storedChoice, act) => {
+            const seen = []
+            const window = load(body, {
+                stored: storedChoice,
+                before: (window) => {
+                    parseHead(window)
+                    window.document.addEventListener('load', (event) => {
+                        if (event.target.getAttribute?.('src')?.includes('googletagmanager')) seen.push(layer(window))
+                    }, true)
+                },
+            })
+            act(window)
+            expect(seen).toEqual([[GA_DEFAULT, GA_GRANTED]])
+        })
     })
 })

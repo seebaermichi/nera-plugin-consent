@@ -73,6 +73,53 @@
 
     let current = readChoice()
 
+    // ---- Google Consent Mode -----------------------------------------------
+
+    /**
+     * The category → signals map on the head include's `default` script
+     * (ROADMAP "Google Consent Mode default"), or null: no such script, or
+     * its JSON is not a map of string lists. Without a default on the page an
+     * update means nothing, so then none is sent.
+     */
+    function readGoogleSignals() {
+        const script = document.querySelector('script[data-consent-google]')
+        if (!script) return null
+        let signals
+        try {
+            signals = JSON.parse(script.getAttribute('data-consent-google'))
+        } catch {
+            return null
+        }
+        if (!signals || typeof signals !== 'object' || Array.isArray(signals)) return null
+        const lists = Object.values(signals)
+        if (!lists.every((list) => Array.isArray(list) && list.every((signal) => typeof signal === 'string'))) return null
+        return signals
+    }
+
+    const googleSignals = readGoogleSignals()
+
+    /**
+     * Send `gtag('consent', 'update', …)` for the current choice: every mapped
+     * signal, `granted` when the visitor granted its category, else `denied`
+     * (so a withdrawal is sent at once). Pushes an `arguments` object as gtag
+     * does — Google tags ignore a plain array. Runs before activation, so the
+     * update precedes every tag it unlocks.
+     */
+    function sendGoogleUpdate() {
+        if (!googleSignals || current === null) return
+        const state = {}
+        for (const [category, signals] of Object.entries(googleSignals)) {
+            const value = current.categories.includes(category) ? 'granted' : 'denied'
+            for (const signal of signals) state[signal] = value
+        }
+        gtag('consent', 'update', state)
+    }
+
+    /** Google's `gtag`, defined here: the site's own copy is not ours to call. */
+    function gtag() {
+        (window.dataLayer = window.dataLayer || []).push(arguments)
+    }
+
     const copy = (choice) => (choice ? { ...choice, categories: [...choice.categories] } : null)
 
     const has = (id) => id === NECESSARY || (current !== null && current.categories.includes(id))
@@ -93,6 +140,7 @@
         }
         root.hidden = true
         reserveSpace()
+        sendGoogleUpdate()
         // Grants more → activates now; grants less → from the next page load (O5).
         activateGranted()
         document.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: copy(current) }))
@@ -341,5 +389,6 @@
         if (typeof ResizeObserver === 'function') new ResizeObserver(reserveSpace).observe(root)
         window.addEventListener('resize', reserveSpace)
     }
+    sendGoogleUpdate()
     activateGranted()
 })()
