@@ -1,4 +1,5 @@
 import { FALLBACK_LANG, builtinCategory, localize, resolveTexts } from './texts.js'
+import { GOOGLE_REQUIRED_SIGNALS, GOOGLE_SIGNALS } from './config.js'
 import { warn } from './warn.js'
 
 // Builds `app.consent` from a normalized config (ROADMAP "`app.consent`").
@@ -70,6 +71,25 @@ function buildLocale(config, lang, { app, basePath }) {
 }
 
 /**
+ * `app.consent.google`: `null` when Consent Mode is off, else the category →
+ * signals map and the `default` state — every mapped signal plus the four
+ * v2 ones, in gtag's order, each `denied`. Nothing is granted before the
+ * visitor chooses (legal floor), so no other value can appear here.
+ */
+function buildGoogle(google) {
+    if (!google) return null
+    const mapped = new Set([...GOOGLE_REQUIRED_SIGNALS, ...Object.values(google.signals).flat()])
+    const defaults = {}
+    for (const signal of GOOGLE_SIGNALS) {
+        if (mapped.has(signal)) defaults[signal] = 'denied'
+    }
+    const signals = Object.fromEntries(
+        Object.entries(google.signals).map(([category, list]) => [category, [...list]])
+    )
+    return { signals, defaults }
+}
+
+/**
  * @param {object} config result of `normalizeConfig`
  * @param {{ app: object, pagesData?: object[] }} data
  * @returns {object} `app.consent`
@@ -112,5 +132,6 @@ export function buildAppConsent(config, { app, pagesData }) {
         locales,
         scripts,
         hosts,
+        google: buildGoogle(config.google_consent_mode),
     }
 }

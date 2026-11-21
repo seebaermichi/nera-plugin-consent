@@ -19,6 +19,26 @@ const CATEGORY_ID = /^[a-z][a-z0-9-]*$/
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/
 const SCRIPT_FLAGS = ['async', 'defer', 'module']
 
+// Google Consent Mode v2 (ROADMAP "Google Consent Mode"). The signal names
+// gtag.js knows, in Google's documented order; the first four are the ones
+// Consent Mode v2 requires, so the `default` call always lists them.
+export const GOOGLE_SIGNALS = [
+    'ad_storage',
+    'ad_user_data',
+    'ad_personalization',
+    'analytics_storage',
+    'functionality_storage',
+    'personalization_storage',
+    'security_storage',
+]
+export const GOOGLE_REQUIRED_SIGNALS = GOOGLE_SIGNALS.slice(0, 4)
+// `google_consent_mode: true` maps these categories, as far as the site
+// configures them.
+export const GOOGLE_DEFAULT_MAPPING = {
+    analytics: ['analytics_storage'],
+    marketing: ['ad_storage', 'ad_user_data', 'ad_personalization'],
+}
+
 export function defaults() {
     return {
         revision: 1,
@@ -26,6 +46,7 @@ export function defaults() {
         notice: true,
         categories: [],
         texts: {},
+        google_consent_mode: false,
     }
 }
 
@@ -228,6 +249,83 @@ function readTexts(raw, fallback) {
     return texts
 }
 
+/**
+ * First pass over `google_consent_mode`: the shape only. Categories are
+ * checked once every key is read (`resolveGoogle`), since YAML key order is
+ * the author's. Returns `false` (off), `true` (default mapping) or the raw
+ * `signals` map.
+ */
+function readGoogle(value, fallback) {
+    if (typeof value === 'boolean') return value
+    if (!isPlainObject(value)) return bad('google_consent_mode', value, fallback)
+    readKeys(value, ['signals'], 'google_consent_mode')
+    if (value.signals === undefined || value.signals === null) return true
+    if (!isPlainObject(value.signals)) {
+        return bad('google_consent_mode.signals', value.signals, fallback)
+    }
+    return { ...value.signals }
+}
+
+function readGoogleSignals(raw, where) {
+    const list = Array.isArray(raw) ? raw : [raw]
+    const signals = []
+    for (const signal of list) {
+        if (!GOOGLE_SIGNALS.includes(signal)) {
+            warn(
+                `${FILE}: ignoring unknown Consent Mode signal ${show(signal)} in ${where},` +
+                    ` expected one of ${GOOGLE_SIGNALS.join(', ')}`
+            )
+        } else if (!signals.includes(signal)) {
+            signals.push(signal)
+        }
+    }
+    return signals
+}
+
+/**
+ * Second pass: map each configured category to its signals, in category
+ * order. A reserved or unconfigured category and an unknown signal warn and
+ * are dropped; a signal already mapped by an earlier category too, so each
+ * signal has exactly one category. Nothing left → off, with a warning.
+ *
+ * @returns {false|{ signals: Object<string, string[]> }}
+ */
+function resolveGoogle(value, categories) {
+    if (value === false) return false
+    const where = 'google_consent_mode.signals'
+    const requested = value === true ? GOOGLE_DEFAULT_MAPPING : value
+    const configured = new Set(categories.map((category) => category.id))
+
+    if (value !== true) {
+        for (const id of Object.keys(requested)) {
+            if (id === RESERVED_CATEGORY) {
+                warn(`${FILE}: ignoring ${where}.${id}, "${RESERVED_CATEGORY}" grants nothing to Google`)
+            } else if (!configured.has(id)) {
+                warn(`${FILE}: ignoring ${where}.${id}, there is no category "${id}"`)
+            }
+        }
+    }
+
+    const taken = new Set()
+    const signals = {}
+    for (const { id } of categories) {
+        if (!Object.hasOwn(requested, id)) continue
+        const own = readGoogleSignals(requested[id], `${where}.${id}`).filter((signal) => {
+            if (!taken.has(signal)) return true
+            warn(`${FILE}: ignoring ${signal} in ${where}.${id}, an earlier category maps it`)
+            return false
+        })
+        own.forEach((signal) => taken.add(signal))
+        if (own.length > 0) signals[id] = own
+    }
+
+    if (Object.keys(signals).length === 0) {
+        warn(`${FILE}: google_consent_mode is off, no configured category maps to a Consent Mode signal`)
+        return false
+    }
+    return { signals }
+}
+
 const readers = {
     revision: (value, fallback) =>
         Number.isInteger(value) && value >= 1 ? value : bad('revision', value, fallback),
@@ -235,6 +333,7 @@ const readers = {
     notice: (value, fallback) => (typeof value === 'boolean' ? value : bad('notice', value, fallback)),
     categories: readCategories,
     texts: readTexts,
+    google_consent_mode: readGoogle,
 }
 
 /**
@@ -267,6 +366,7 @@ export function normalizeConfig(raw) {
         warn(`${FILE}: ignoring notice: false, the site has categories and shows the banner`)
         config.notice = true
     }
+    config.google_consent_mode = resolveGoogle(config.google_consent_mode, config.categories)
     return config
 }
 

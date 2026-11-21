@@ -46,6 +46,7 @@ describe('normalizeConfig', () => {
             notice: true,
             categories: [],
             texts: {},
+            google_consent_mode: false,
         })
         expect(warnSpy).not.toHaveBeenCalled()
     })
@@ -191,6 +192,134 @@ describe('normalizeConfig', () => {
     it('uses the defaults for a non-mapping top level', () => {
         expect(normalizeConfig(['x'])).toEqual(defaults())
         expect(warnSpy).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('google_consent_mode', () => {
+    const ga = { name: 'Google Analytics', provider: 'Google Ireland Limited', purpose: 'Counts visits.' }
+    const ads = { name: 'Google Ads', provider: 'Google Ireland Limited', purpose: 'Measures ads.' }
+    const sites = {
+        analytics: { id: 'analytics', services: [ga] },
+        marketing: { id: 'marketing', services: [ads] },
+        media: { id: 'media', services: [youtube] },
+    }
+    const google = (value, ids = ['analytics', 'marketing', 'media']) =>
+        normalizeConfig({
+            ...(value === undefined ? {} : { google_consent_mode: value }),
+            categories: ids.map((id) => sites[id]),
+        }).google_consent_mode
+    const appGoogle = (value, ids) =>
+        buildAppConsent(
+            normalizeConfig({
+                privacy_url: '/p.html',
+                ...(value === undefined ? {} : { google_consent_mode: value }),
+                categories: (ids || ['analytics', 'marketing']).map((id) => sites[id]),
+            }),
+            { app: { lang: 'en' }, pagesData: [] }
+        ).google
+
+    it('is off by default: no app.consent.google', () => {
+        expect(google(undefined)).toBe(false)
+        expect(google(null)).toBe(false)
+        expect(google(false)).toBe(false)
+        expect(appGoogle(undefined)).toBeNull()
+        expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('true maps analytics and marketing, as far as they are configured', () => {
+        expect(google(true)).toEqual({
+            signals: {
+                analytics: ['analytics_storage'],
+                marketing: ['ad_storage', 'ad_user_data', 'ad_personalization'],
+            },
+        })
+        expect(google(true, ['media', 'analytics'])).toEqual({ signals: { analytics: ['analytics_storage'] } })
+        expect(google({}, ['marketing'])).toEqual({
+            signals: { marketing: ['ad_storage', 'ad_user_data', 'ad_personalization'] },
+        })
+        expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('a signals map replaces the default mapping, in category order, de-duplicated', () => {
+        const value = {
+            signals: {
+                media: 'functionality_storage',
+                analytics: ['analytics_storage', 'personalization_storage', 'analytics_storage'],
+            },
+        }
+        expect(google(value)).toEqual({
+            signals: {
+                analytics: ['analytics_storage', 'personalization_storage'],
+                media: ['functionality_storage'],
+            },
+        })
+        expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('warns about and drops unknown signals, reserved and unconfigured categories', () => {
+        const value = {
+            signals: {
+                necessary: ['security_storage'],
+                ghost: ['ad_storage'],
+                analytics: ['analytics_storage', 'analytics', 42],
+                marketing: ['analytics_storage', 'ad_storage'],
+            },
+            mode: 'advanced',
+        }
+        expect(google(value)).toEqual({
+            signals: { analytics: ['analytics_storage'], marketing: ['ad_storage'] },
+        })
+        const all = warnings().join('\n')
+        expect(all).toMatch(/unknown key google_consent_mode\."mode"/)
+        expect(all).toMatch(/ignoring google_consent_mode\.signals\.necessary, "necessary" grants nothing/)
+        expect(all).toMatch(/ignoring google_consent_mode\.signals\.ghost, there is no category "ghost"/)
+        expect(all).toMatch(/unknown Consent Mode signal "analytics" in google_consent_mode\.signals\.analytics/)
+        expect(all).toMatch(/unknown Consent Mode signal 42/)
+        expect(all).toMatch(/ignoring analytics_storage in google_consent_mode\.signals\.marketing, an earlier category maps it/)
+        expect(warnings()).toHaveLength(6)
+    })
+
+    it.each([['yes'], [1], [['analytics']]])('a non-boolean, non-map value %j warns and is off', (value) => {
+        expect(google(value)).toBe(false)
+        expect(warnings().join('\n')).toMatch(/invalid google_consent_mode/)
+    })
+
+    it('a non-map signals value warns and is off', () => {
+        expect(google({ signals: ['analytics_storage'] })).toBe(false)
+        expect(warnings().join('\n')).toMatch(/invalid google_consent_mode\.signals/)
+    })
+
+    it.each([
+        ['notice mode (no categories)', true, []],
+        ['no mapped category', true, ['media']],
+        ['a map with nothing valid', { signals: { analytics: ['x'] } }, ['analytics']],
+    ])('is off with a warning in %s', (_, value, ids) => {
+        expect(google(value, ids)).toBe(false)
+        expect(warnings().join('\n')).toMatch(/google_consent_mode is off, no configured category maps/)
+    })
+
+    it('app.consent.google: the map and a default that denies every mapped and v2 signal', () => {
+        expect(appGoogle(true, ['analytics'])).toEqual({
+            signals: { analytics: ['analytics_storage'] },
+            defaults: {
+                ad_storage: 'denied',
+                ad_user_data: 'denied',
+                ad_personalization: 'denied',
+                analytics_storage: 'denied',
+            },
+        })
+        const custom = appGoogle({
+            signals: { analytics: ['analytics_storage', 'security_storage'], marketing: ['functionality_storage'] },
+        })
+        expect(Object.keys(custom.defaults)).toEqual([
+            'ad_storage',
+            'ad_user_data',
+            'ad_personalization',
+            'analytics_storage',
+            'functionality_storage',
+            'security_storage',
+        ])
+        expect(new Set(Object.values(custom.defaults))).toEqual(new Set(['denied']))
     })
 })
 

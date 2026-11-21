@@ -239,6 +239,55 @@ describe('head.pug', () => {
     it('renders nothing without scripts', () => {
         expect(render('include /head', { app: makeApp({}) })).toBe('')
     })
+
+    describe('Google Consent Mode default', () => {
+        const GOOGLE_DEFAULT =
+            '<script data-consent-google="{&quot;analytics&quot;:[&quot;analytics_storage&quot;]}">' +
+            'window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments) } ' +
+            'gtag(\'consent\', \'default\', {"ad_storage":"denied","ad_user_data":"denied",' +
+            '"ad_personalization":"denied","analytics_storage":"denied"});</script>'
+
+        it('is off by default: the head is unchanged, no data-consent-google', () => {
+            const html = render('include /head')
+            expect(html).not.toContain('data-consent-google')
+            expect(html).not.toContain('dataLayer')
+            expect(html.startsWith('<script type="text/plain"')).toBe(true)
+        })
+
+        it('comes first, then the unchanged gated scripts', () => {
+            const off = render('include /head')
+            const on = render('include /head', { app: makeApp({ ...CONFIG, google_consent_mode: true }) })
+            expect(on).toBe(GOOGLE_DEFAULT + off)
+            const $ = load(on, null, false)
+            const scripts = $('script')
+            expect(scripts).toHaveLength(4)
+            expect(scripts.eq(0).attr('type')).toBeUndefined()
+            expect(JSON.parse(scripts.eq(0).attr('data-consent-google'))).toEqual({ analytics: ['analytics_storage'] })
+            scripts.slice(1).each((_, el) => expect($(el).attr('type')).toBe('text/plain'))
+        })
+
+        it('renders the default even when no script is configured', () => {
+            const config = {
+                categories: [{ id: 'analytics', services: [{ name: 'GA', provider: 'Google', purpose: 'Stats' }] }],
+                google_consent_mode: true,
+            }
+            expect(render('include /head', { app: makeApp(config) })).toBe(GOOGLE_DEFAULT)
+        })
+
+        it('never grants a signal, and the attribute JSON and code cannot break out', () => {
+            const app = makeApp({ ...CONFIG, google_consent_mode: true })
+            app.consent.google = {
+                signals: { 'x"><script>alert(1)</script>': ['a\'b'] },
+                defaults: { '</script><script>alert(1)//': 'denied' },
+            }
+            const html = render('include /head', { app })
+            const $ = load(html, null, false)
+            expect($('script')).toHaveLength(4)
+            expect(JSON.parse($('script').eq(0).attr('data-consent-google'))).toEqual(app.consent.google.signals)
+            expect(html).toContain('{"<\\/script><script>alert(1)//":"denied"}')
+            expect(html).not.toMatch(/granted/)
+        })
+    })
 })
 
 describe('embed.pug (D2)', () => {

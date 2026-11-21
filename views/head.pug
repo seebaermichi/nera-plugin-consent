@@ -9,8 +9,17 @@
 //- runtime activates it once its category is granted. Inline code is written
 //- raw (a script's text is never entity-decoded), with `</script` and `<!--`
 //- escaped so it cannot end the element early.
+//-
+//- With Google Consent Mode on (`app.consent.google`, ROADMAP "Google Consent
+//- Mode") one live inline script comes first: the `dataLayer`/`gtag` stub and
+//- `gtag('consent', 'default', …)` with every signal denied, so it runs before
+//- any Google tag. Its `data-consent-google` holds the category → signals map
+//- the runtime sends `update` from. Keep this include above every Google tag.
+- const consentScriptCode = (code) => code.replace(/<(\/script|!--)/gi, '<\\$1')
+if app.consent && app.consent.google
+    - const consentGoogleDefault = 'window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments) } gtag(\'consent\', \'default\', ' + JSON.stringify(app.consent.google.defaults) + ');'
+    script(data-consent-google=JSON.stringify(app.consent.google.signals))!= consentScriptCode(consentGoogleDefault)
 if app.consent && app.consent.scripts && app.consent.scripts.length
-    - const consentScriptCode = (code) => code.replace(/<(\/script|!--)/gi, '<\\$1')
     each consentScript in app.consent.scripts
         if typeof consentScript.src === 'string'
             script(
